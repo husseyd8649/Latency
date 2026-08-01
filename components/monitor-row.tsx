@@ -2,11 +2,22 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Network, ShieldCheck, Pause, Play, Trash2, Zap, FlaskConical } from "lucide-react";
+import {
+  Globe,
+  Network,
+  ShieldCheck,
+  Pause,
+  Play,
+  Trash2,
+  Zap,
+  FlaskConical,
+  Pencil,
+} from "lucide-react";
 import { Badge, StatusDot } from "@/components/ui/primitives";
 import { Sparkline } from "@/components/sparkline";
 import { deleteMonitor, togglePause } from "@/app/dashboard/monitors/actions";
 import { runNow } from "@/app/dashboard/monitors/run-now";
+import { EditMonitorModal, type EditableMonitor } from "@/components/edit-monitor-modal";
 import { cn } from "@/lib/utils";
 
 const typeIconMap = {
@@ -21,8 +32,10 @@ export type MonitorRowData = {
   type: "HTTP" | "TCP" | "SSL";
   target: string;
   intervalSeconds: number;
+  timeoutMs: number;
+  expectedStatus: number | null;
   isPaused: boolean;
-  createdAt: string; // serialized
+  createdAt: string;
   last: {
     status: "UP" | "DOWN";
     responseTimeMs: number | null;
@@ -34,6 +47,7 @@ export type MonitorRowData = {
 
 export function MonitorRow({ m }: { m: MonitorRowData }) {
   const [simulated, setSimulated] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const TypeIcon = typeIconMap[m.type];
   const realState = deriveState(m.isPaused, m.last?.status);
@@ -41,106 +55,132 @@ export function MonitorRow({ m }: { m: MonitorRowData }) {
     ? { dot: "down" as const, badge: "down" as const, label: "Simulated" }
     : realState;
 
+  const editable: EditableMonitor = {
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    target: m.target,
+    intervalSeconds: m.intervalSeconds,
+    timeoutMs: m.timeoutMs,
+    expectedStatus: m.expectedStatus,
+  };
+
   return (
-    <tr
-      className={cn(
-        "border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]/50 transition-colors",
-        simulated && "bg-[var(--down-soft)]"
-      )}
-    >
-      <td className="px-3 py-3 align-middle pl-5">
-        <StatusDot variant={state.dot} />
-      </td>
-      <td className="px-3 py-3 align-middle">
-        <div className="font-medium text-[var(--text)]">{m.name}</div>
-        <div className="text-[10px] text-[var(--text-subtle)] mt-0.5">
-          {m.last
-            ? `Last check ${formatRelative(new Date(m.last.checkedAt))}`
-            : `Created ${formatRelative(new Date(m.createdAt))}`}
-        </div>
-      </td>
-      <td className="px-3 py-3 align-middle">
-        <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-          <TypeIcon className="w-3.5 h-3.5" />
-          {m.type}
-        </span>
-      </td>
-      <td className="px-3 py-3 align-middle">
-        <span
-          className="font-mono text-xs text-[var(--text-muted)] truncate max-w-[200px] inline-block align-middle"
-          title={m.target}
-        >
-          {m.target}
-        </span>
-      </td>
-      <td className="px-3 py-3 align-middle">
-        <Sparkline data={m.sparkline} />
-      </td>
-      <td className="px-3 py-3 align-middle">
-        <span className="font-mono text-xs text-[var(--text-muted)]">
-          {m.last?.responseTimeMs != null ? `${m.last.responseTimeMs}ms` : "—"}
-        </span>
-      </td>
-      <td className="px-3 py-3 align-middle">
-        <Badge variant={state.badge}>{state.label}</Badge>
-        {!simulated && m.last?.error && (
-          <div
-            className="text-[10px] text-[var(--op-down)] mt-1 truncate max-w-[200px]"
-            title={m.last.error}
-          >
-            {m.last.error}
-          </div>
+    <>
+      <tr
+        className={cn(
+          "border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]/50 transition-colors",
+          simulated && "bg-[var(--down-soft)]"
         )}
-      </td>
-      <td className="px-3 py-3 align-middle text-right pr-5">
-        <div className="inline-flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setSimulated((s) => !s)}
-            className={cn(
-              "p-1.5 rounded-md transition-colors",
-              simulated
-                ? "text-[var(--op-down)] bg-[var(--down-soft)]"
-                : "text-[var(--text-muted)] hover:text-[var(--op-degraded)] hover:bg-[var(--surface-2)]"
-            )}
-            title={simulated ? "Stop simulation" : "Simulate incident (visual only)"}
+      >
+        <td className="px-3 py-3 align-middle pl-5">
+          <StatusDot variant={state.dot} />
+        </td>
+        <td className="px-3 py-3 align-middle">
+          <div className="font-medium text-[var(--text)]">{m.name}</div>
+          <div className="text-[10px] text-[var(--text-subtle)] mt-0.5">
+            {m.last
+              ? `Last check ${formatRelative(new Date(m.last.checkedAt))}`
+              : `Created ${formatRelative(new Date(m.createdAt))}`}
+          </div>
+        </td>
+        <td className="px-3 py-3 align-middle">
+          <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <TypeIcon className="w-3.5 h-3.5" />
+            {m.type}
+          </span>
+        </td>
+        <td className="px-3 py-3 align-middle">
+          <span
+            className="font-mono text-xs text-[var(--text-muted)] truncate max-w-[200px] inline-block align-middle"
+            title={m.target}
           >
-            <FlaskConical className="w-3.5 h-3.5" />
-          </button>
-          <form action={runNow}>
-            <input type="hidden" name="id" value={m.id} />
-            <button
-              type="submit"
-              className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-40 disabled:pointer-events-none"
-              title="Run now"
-              disabled={m.isPaused}
+            {m.target}
+          </span>
+        </td>
+        <td className="px-3 py-3 align-middle">
+          <Sparkline data={m.sparkline} />
+        </td>
+        <td className="px-3 py-3 align-middle">
+          <span className="font-mono text-xs text-[var(--text-muted)]">
+            {m.last?.responseTimeMs != null ? `${m.last.responseTimeMs}ms` : "—"}
+          </span>
+        </td>
+        <td className="px-3 py-3 align-middle">
+          <Badge variant={state.badge}>{state.label}</Badge>
+          {!simulated && m.last?.error && (
+            <div
+              className="text-[10px] text-[var(--op-down)] mt-1 truncate max-w-[200px]"
+              title={m.last.error}
             >
-              <Zap className="w-3.5 h-3.5" />
-            </button>
-          </form>
-          <form action={togglePause}>
-            <input type="hidden" name="id" value={m.id} />
+              {m.last.error}
+            </div>
+          )}
+        </td>
+        <td className="px-3 py-3 align-middle text-right pr-5">
+          <div className="inline-flex items-center gap-1">
             <button
-              type="submit"
-              className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
-              title={m.isPaused ? "Resume" : "Pause"}
+              type="button"
+              onClick={() => setSimulated((s) => !s)}
+              className={cn(
+                "p-1.5 rounded-md transition-colors",
+                simulated
+                  ? "text-[var(--op-down)] bg-[var(--down-soft)]"
+                  : "text-[var(--text-muted)] hover:text-[var(--op-degraded)] hover:bg-[var(--surface-2)]"
+              )}
+              title={simulated ? "Stop simulation" : "Simulate incident (visual only)"}
             >
-              {m.isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+              <FlaskConical className="w-3.5 h-3.5" />
             </button>
-          </form>
-          <form action={deleteMonitor}>
-            <input type="hidden" name="id" value={m.id} />
             <button
-              type="submit"
-              className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--op-down)] hover:bg-[var(--surface-2)] transition-colors"
-              title="Delete"
+              type="button"
+              onClick={() => setEditing(true)}
+              className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] transition-colors"
+              title="Edit"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Pencil className="w-3.5 h-3.5" />
             </button>
-          </form>
-        </div>
-      </td>
-    </tr>
+            <form action={runNow}>
+              <input type="hidden" name="id" value={m.id} />
+              <button
+                type="submit"
+                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                title="Run now"
+                disabled={m.isPaused}
+              >
+                <Zap className="w-3.5 h-3.5" />
+              </button>
+            </form>
+            <form action={togglePause}>
+              <input type="hidden" name="id" value={m.id} />
+              <button
+                type="submit"
+                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
+                title={m.isPaused ? "Resume" : "Pause"}
+              >
+                {m.isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+              </button>
+            </form>
+            <form action={deleteMonitor}>
+              <input type="hidden" name="id" value={m.id} />
+              <button
+                type="submit"
+                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--op-down)] hover:bg-[var(--surface-2)] transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+
+      <EditMonitorModal
+        monitor={editable}
+        open={editing}
+        onClose={() => setEditing(false)}
+      />
+    </>
   );
 }
 
