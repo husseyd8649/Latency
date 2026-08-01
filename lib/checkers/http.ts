@@ -1,10 +1,24 @@
 // lib/checkers/http.ts
+import { Agent } from "undici";
+import { lookup } from "node:dns/promises";
+
 export type CheckResult = {
   status: "UP" | "DOWN";
   responseTimeMs: number | null;
   statusCode: number | null;
   error: string | null;
 };
+
+// Force IPv4-only DNS to avoid Render's flaky outbound IPv6 routing.
+const ipv4Dispatcher = new Agent({
+  connect: {
+    lookup: (hostname, options, callback) => {
+      lookup(hostname, { family: 4 })
+        .then((res) => callback(null, res.address, 4))
+        .catch(callback);
+    },
+  },
+});
 
 export async function checkHttp(opts: {
   url: string;
@@ -20,15 +34,16 @@ export async function checkHttp(opts: {
       method: "GET",
       signal: controller.signal,
       redirect: "follow",
-      // Avoid Next.js data cache for monitoring calls
       cache: "no-store",
-                  headers: {
+      headers: {
         "User-Agent":
           "Mozilla/5.0 (compatible; LatencyBot/1.0; +https://latency-4hkf.onrender.com)",
         "Accept":
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
       },
+      // @ts-expect-error — undici dispatcher is valid at runtime
+      dispatcher: ipv4Dispatcher,
     });
 
     const responseTimeMs = Math.round(performance.now() - start);
