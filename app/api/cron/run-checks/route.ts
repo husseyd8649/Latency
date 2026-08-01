@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       OR: [{ nextCheckAt: null }, { nextCheckAt: { lte: now } }],
     },
     orderBy: { nextCheckAt: "asc" },
-    take: 1000,
+    take: 500,
   });
 
   const startedAt = Date.now();

@@ -8,7 +8,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-
 type ActionState = { error?: string; fieldErrors?: Record<string, string> };
 
 /**
@@ -111,9 +110,10 @@ export async function runAllMonitors(): Promise<void> {
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
 }
+
 /**
  * Delete every monitor owned by the current user. Cascades remove checks
- * and incidents. Requires the client to have prompted for confirmation.
+ * and incidents.
  */
 export async function deleteAllMonitors(): Promise<{ deleted: number }> {
   const user = await requireUser();
@@ -127,33 +127,36 @@ export async function deleteAllMonitors(): Promise<{ deleted: number }> {
   return { deleted: result.count };
 }
 
+// ---------- Edit ------------------------------------------------------------
 
-// Edit schema — cannot change type (would break check history)
-const editSchema = z
-  .object({
-    id: z.string().min(1),
-    name: z.string().trim().min(1, "Name is required").max(80),
-    target: z.string().trim().min(1, "Target is required").max(500),
-    intervalSeconds: z.coerce
-      .number()
-      .int()
-      .min(60, "Minimum 60 seconds")
-      .max(86400, "Maximum 24 hours"),
-    timeoutMs: z.coerce
-      .number()
-      .int()
-      .min(1000, "Minimum 1000 ms")
-      .max(60000, "Maximum 60000 ms"),
-    expectedStatus: z.coerce
-      .number()
-      .int()
-      .min(100)
-      .max(599)
-      .optional()
-      .or(z.literal("").transform(() => undefined)),
-  });
+const editSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1, "Name is required").max(80),
+  target: z.string().trim().min(1, "Target is required").max(500),
+  intervalSeconds: z.coerce
+    .number()
+    .int()
+    .min(60, "Minimum 60 seconds")
+    .max(86400, "Maximum 24 hours"),
+  timeoutMs: z.coerce
+    .number()
+    .int()
+    .min(1000, "Minimum 1000 ms")
+    .max(60000, "Maximum 60000 ms"),
+  expectedStatus: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .max(599)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+});
 
-type EditState = { error?: string; fieldErrors?: Record<string, string>; ok?: boolean };
+type EditState = {
+  error?: string;
+  fieldErrors?: Record<string, string>;
+  ok?: boolean;
+};
 
 /**
  * Update editable fields of a monitor. Type is intentionally not changeable.
@@ -178,12 +181,13 @@ export async function editMonitor(
     const fieldErrors: Record<string, string> = {};
     for (const issue of parsed.error.issues) {
       const p = issue.path[0];
-      if (typeof p === "string" && !fieldErrors[p]) fieldErrors[p] = issue.message;
+      if (typeof p === "string" && !fieldErrors[p]) {
+        fieldErrors[p] = issue.message;
+      }
     }
     return { error: "Please fix the errors below", fieldErrors };
   }
 
-  // Verify ownership + fetch type to decide expectedStatus applicability
   const existing = await prisma.monitor.findFirst({
     where: { id: parsed.data.id, userId: user.id },
     select: { type: true },
@@ -198,13 +202,64 @@ export async function editMonitor(
       intervalSeconds: parsed.data.intervalSeconds,
       timeoutMs: parsed.data.timeoutMs,
       expectedStatus:
-        existing.type === "HTTP"
-          ? parsed.data.expectedStatus ?? 200
-          : null,
+        existing.type === "HTTP" ? parsed.data.expectedStatus ?? 200 : null,
     },
   });
 
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
   return { ok: true };
+}
+
+// ---------- Bulk interval update -------------------------------------------
+
+/**
+ /**
+ * Bulk update all monitors owned by the current user to a given interval.
+ * Also re-staggers nextCheckAt across the new interval window to avoid a burst.
+ */
+export async function bulkUpdateInterval(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const seconds = Number(formData.get("seconds") ?? 900);
+
+  if (!Number.isFinite(seconds) || seconds < 60 || seconds > 86400) return;
+
+  const monitors = await prisma.monitor.findMany({
+    where: { userId: user.id },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (monitors.length === 0) return;
+
+  const now = new Date();
+  const bucket = seconds / monitors.length;
+
+  // Use the interactive transaction form so we can set a longer timeout.
+  // 500 individual updates take a while — 30s ceiling is generous.
+  await prisma.$transaction(
+    async (tx) => {
+      // First, set intervalSeconds for everyone in one query
+      await tx.monitor.updateMany({
+        where: { userId: user.id },
+        data: { intervalSeconds: seconds },
+      });
+
+      // Then stagger nextCheckAt — this still needs per-row updates because
+      // each row gets a different timestamp. Batch them sequentially inside
+      // the transaction so they share one connection.
+      for (let i = 0; i < monitors.length; i++) {
+        await tx.monitor.update({
+          where: { id: monitors[i].id },
+          data: {
+            nextCheckAt: new Date(now.getTime() + Math.floor(i * bucket * 1000)),
+          },
+        });
+      }
+    },
+    { timeout: 60000, maxWait: 15000 }
+  );
+
+  revalidatePath("/dashboard/monitors");
+  revalidatePath("/dashboard");
 }

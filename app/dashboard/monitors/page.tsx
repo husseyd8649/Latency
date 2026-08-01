@@ -14,6 +14,7 @@ import { MonitorsTable } from "@/components/monitors-table";
 import { RunAllButton } from "@/components/run-all-button";
 import { DeleteAllButton } from "@/components/delete-all-button";
 import { recentChecksForSparkline } from "@/lib/stats";
+import { bulkUpdateInterval } from "./actions";
 
 export default async function MonitorsPage() {
   const user = await requireUser();
@@ -65,7 +66,7 @@ export default async function MonitorsPage() {
 
   return (
     <>
-      <PageHeader
+            <PageHeader
         title="Monitors"
         description="All checks in your workspace."
         actions={
@@ -108,5 +109,30 @@ export default async function MonitorsPage() {
         </Card>
       )}
     </>
+  );
+}
+
+function BulkIntervalForm() {
+  return (
+    <form action={bulkUpdateInterval} className="inline-flex items-center gap-1">
+      <select
+        name="seconds"
+        defaultValue="900"
+        className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-xs text-[var(--text)]"
+        aria-label="New interval"
+      >
+        <option value="300">5 min</option>
+        <option value="600">10 min</option>
+        <option value="900">15 min</option>
+        <option value="1800">30 min</option>
+      </select>
+      <button
+        type="submit"
+        className="inline-flex items-center justify-center h-8 px-2.5 rounded-md border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+        title="Bulk set interval for all monitors and re-stagger next checks"
+      >
+        Apply
+      </button>
+    </form>
   );
 }
