@@ -58,16 +58,19 @@ export default async function MonitorsPage() {
 
   return (
     <>
-      <PageHeader
+            <PageHeader
         title="Monitors"
         description="All checks in your workspace."
         actions={
-          <Link href="/dashboard/add">
-            <Button size="sm">
-              <PlusCircle className="w-3.5 h-3.5" />
-              New monitor
-            </Button>
-          </Link>
+          <>
+            <RunAllButton count={activeCount} />
+            <Link href="/dashboard/add">
+              <Button size="sm">
+                <PlusCircle className="w-3.5 h-3.5" />
+                New monitor
+              </Button>
+            </Link>
+          </>
         }
       />
 
