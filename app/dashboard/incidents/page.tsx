@@ -8,6 +8,7 @@ import {
   PageHeader,
 } from "@/components/ui/primitives";
 import { AlertTriangle, CheckCircle2, Globe, Network, ShieldCheck } from "lucide-react";
+import { ReconcileIncidentsButton } from "@/components/reconcile-incidents-button";
 
 const typeIconMap = {
   HTTP: Globe,
@@ -34,9 +35,10 @@ export default async function IncidentsPage() {
 
   return (
     <>
-      <PageHeader
+            <PageHeader
         title="Incidents"
         description="Downtime timeline across your monitors."
+        actions={<ReconcileIncidentsButton />}
       />
 
       {incidents.length === 0 ? (

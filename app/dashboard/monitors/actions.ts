@@ -263,3 +263,89 @@ export async function bulkUpdateInterval(formData: FormData): Promise<void> {
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
 }
+
+// ---------- Incident reconciliation ----------------------------------------
+
+/**
+ * Close open incidents whose monitor's most recent check is UP.
+ * Uses the most recent check's timestamp as the resolvedAt.
+ * Safe to run repeatedly.
+ */
+export async function reconcileIncidents(): Promise<{
+  scanned: number;
+  resolved: number;
+}> {
+  const user = await requireUser();
+
+  // Find all open incidents for this user
+  const open = await prisma.incident.findMany({
+    where: {
+      resolvedAt: null,
+      monitor: { userId: user.id },
+    },
+    select: {
+      id: true,
+      monitorId: true,
+    },
+  });
+
+  if (open.length === 0) {
+    return { scanned: 0, resolved: 0 };
+  }
+
+  // Fetch the most recent check for each involved monitor in one query
+  const monitorIds = Array.from(new Set(open.map((i) => i.monitorId)));
+
+  // Get latest check per monitor. Use a groupBy trick or fetch top check for each.
+  // Simpler and fast enough at this scale: fetch all recent checks, keep first per monitor.
+  const latestChecks = await prisma.check.findMany({
+    where: { monitorId: { in: monitorIds } },
+    orderBy: { checkedAt: "desc" },
+    distinct: ["monitorId"],
+    select: {
+      monitorId: true,
+      status: true,
+      checkedAt: true,
+    },
+  });
+
+  const latestByMonitor = new Map(
+    latestChecks.map((c) => [c.monitorId, c])
+  );
+
+  // Determine which incidents should be closed
+  const toClose: { id: string; resolvedAt: Date }[] = [];
+  for (const incident of open) {
+    const latest = latestByMonitor.get(incident.monitorId);
+    if (latest && latest.status === "UP") {
+      toClose.push({ id: incident.id, resolvedAt: latest.checkedAt });
+    }
+  }
+
+  if (toClose.length === 0) {
+    revalidatePath("/dashboard/incidents");
+    revalidatePath("/dashboard");
+    return { scanned: open.length, resolved: 0 };
+  }
+
+  // Update in batches to avoid holding a single long transaction
+  const BATCH_SIZE = 50;
+  for (let i = 0; i < toClose.length; i += BATCH_SIZE) {
+    const batch = toClose.slice(i, i + BATCH_SIZE);
+    await prisma.$transaction(
+      async (tx) => {
+        for (const { id, resolvedAt } of batch) {
+          await tx.incident.update({
+            where: { id },
+            data: { resolvedAt },
+          });
+        }
+      },
+      { timeout: 30000, maxWait: 10000 }
+    );
+  }
+
+  revalidatePath("/dashboard/incidents");
+  revalidatePath("/dashboard");
+  return { scanned: open.length, resolved: toClose.length };
+}
