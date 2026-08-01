@@ -124,3 +124,86 @@ export async function deleteAllMonitors(): Promise<{ deleted: number }> {
   revalidatePath("/dashboard");
   return { deleted: result.count };
 }
+
+import { z } from "zod";
+
+// Edit schema — cannot change type (would break check history)
+const editSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().trim().min(1, "Name is required").max(80),
+    target: z.string().trim().min(1, "Target is required").max(500),
+    intervalSeconds: z.coerce
+      .number()
+      .int()
+      .min(60, "Minimum 60 seconds")
+      .max(86400, "Maximum 24 hours"),
+    timeoutMs: z.coerce
+      .number()
+      .int()
+      .min(1000, "Minimum 1000 ms")
+      .max(60000, "Maximum 60000 ms"),
+    expectedStatus: z.coerce
+      .number()
+      .int()
+      .min(100)
+      .max(599)
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
+  });
+
+type EditState = { error?: string; fieldErrors?: Record<string, string>; ok?: boolean };
+
+/**
+ * Update editable fields of a monitor. Type is intentionally not changeable.
+ */
+export async function editMonitor(
+  _prev: EditState,
+  formData: FormData
+): Promise<EditState> {
+  const user = await requireUser();
+
+  const raw = {
+    id: formData.get("id"),
+    name: formData.get("name"),
+    target: formData.get("target"),
+    intervalSeconds: formData.get("intervalSeconds"),
+    timeoutMs: formData.get("timeoutMs"),
+    expectedStatus: formData.get("expectedStatus") ?? "",
+  };
+
+  const parsed = editSchema.safeParse(raw);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const p = issue.path[0];
+      if (typeof p === "string" && !fieldErrors[p]) fieldErrors[p] = issue.message;
+    }
+    return { error: "Please fix the errors below", fieldErrors };
+  }
+
+  // Verify ownership + fetch type to decide expectedStatus applicability
+  const existing = await prisma.monitor.findFirst({
+    where: { id: parsed.data.id, userId: user.id },
+    select: { type: true },
+  });
+  if (!existing) return { error: "Monitor not found." };
+
+  await prisma.monitor.update({
+    where: { id: parsed.data.id },
+    data: {
+      name: parsed.data.name,
+      target: parsed.data.target,
+      intervalSeconds: parsed.data.intervalSeconds,
+      timeoutMs: parsed.data.timeoutMs,
+      expectedStatus:
+        existing.type === "HTTP"
+          ? parsed.data.expectedStatus ?? 200
+          : null,
+    },
+  });
+
+  revalidatePath("/dashboard/monitors");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
