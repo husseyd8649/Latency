@@ -21,10 +21,6 @@ type ActionState =
 const MAX_ROWS = 1000;
 const HTTPS_PREFIX = "https://";
 
-/**
- * Parse a bare-domain CSV (one domain per line, optional header)
- * and bulk-create HTTP monitors with staggered nextCheckAt.
- */
 export async function importDomainsCsv(
   _prev: ActionState,
   formData: FormData
@@ -53,13 +49,10 @@ export async function importDomainsCsv(
 
   const text = await file.text();
 
-  // Parse with papaparse; tolerant of headers, quotes, whitespace
   const parsed = Papa.parse<string[]>(text.trim(), {
     skipEmptyLines: true,
   });
 
-    // Filter out non-fatal warnings. papaparse emits a "Delimiter" warning for
-  // single-column files (like a bare domain list) which we can safely ignore.
   const fatalErrors = parsed.errors.filter(
     (e) => e.type !== "Delimiter" && e.code !== "UndetectableDelimiter"
   );
@@ -70,12 +63,10 @@ export async function importDomainsCsv(
     };
   }
 
-  // Flatten to first-column values, skipping obvious header rows
   const rawDomains: { line: number; value: string }[] = [];
   parsed.data.forEach((row, idx) => {
     const cell = String(row?.[0] ?? "").trim();
     if (!cell) return;
-    // Skip a header-like row on line 1
     if (idx === 0 && /^(domain|domains|url|urls|host|hostname)$/i.test(cell)) {
       return;
     }
@@ -93,7 +84,6 @@ export async function importDomainsCsv(
     };
   }
 
-  // Validate + normalize each domain into a full HTTPS URL
   const valid: { line: number; url: string; name: string }[] = [];
   const invalid: ImportResult["invalid"] = [];
   const seenInBatch = new Set<string>();
@@ -116,7 +106,6 @@ export async function importDomainsCsv(
     return { ok: false, error: "No valid domains to import." };
   }
 
-  // Fetch existing monitors so we can skip cross-file duplicates
   const existing = await prisma.monitor.findMany({
     where: {
       userId: user.id,
@@ -130,8 +119,6 @@ export async function importDomainsCsv(
   const toCreate = valid.filter((v) => !existingSet.has(v.url));
   const skippedDuplicate = valid.length - toCreate.length;
 
-  // Bulk create with STAGGERED nextCheckAt so all monitors don't come due
-  // at the same cron tick. Spreads load evenly across one interval window.
   const now = new Date();
   const bucketSizeSeconds =
     toCreate.length > 0 ? intervalSeconds / toCreate.length : 0;
@@ -143,7 +130,7 @@ export async function importDomainsCsv(
       type: "HTTP" as const,
       target: v.url,
       intervalSeconds,
-      timeoutMs: 10000,
+      timeoutMs: 20000,
       expectedStatus: 200,
       isPaused: false,
       nextCheckAt: new Date(
@@ -168,22 +155,14 @@ export async function importDomainsCsv(
   };
 }
 
-/* -------------------------------------------------------------------------- */
-
-/**
- * Turn a raw string like "example.com", "https://example.com", or " example.com/path "
- * into { url, name } if valid; otherwise null.
- */
 function normalizeToHttpsUrl(
   raw: string
 ): { url: string; name: string } | null {
   let s = raw.trim();
   if (!s) return null;
 
-  // Strip surrounding quotes
   s = s.replace(/^["']|["']$/g, "").trim();
 
-  // Prepend https:// if no protocol
   if (!/^https?:\/\//i.test(s)) {
     s = HTTPS_PREFIX + s;
   }
@@ -195,13 +174,9 @@ function normalizeToHttpsUrl(
     return null;
   }
 
-  // Only allow http(s)
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-
-  // Force https for the stored target
   url.protocol = "https:";
 
-  // Basic hostname sanity
   if (
     !url.hostname ||
     !url.hostname.includes(".") ||
@@ -211,7 +186,6 @@ function normalizeToHttpsUrl(
   }
 
   const finalUrl = url.toString();
-  // Trim trailing slash on bare hosts for prettier display
   const displayUrl =
     finalUrl.endsWith("/") && url.pathname === "/"
       ? finalUrl.slice(0, -1)
