@@ -7,7 +7,7 @@ import { runMonitorCheck, runWithConcurrency } from "@/lib/checkers/runner";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CONCURRENCY = 20;
+const CONCURRENCY = 15;
 
 export async function POST(req: Request) {
   // Auth: expect "Authorization: Bearer <CRON_SECRET>"
