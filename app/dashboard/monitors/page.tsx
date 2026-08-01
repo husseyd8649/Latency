@@ -9,10 +9,11 @@ import {
   PageHeader,
 } from "@/components/ui/primitives";
 import { Globe, PlusCircle } from "lucide-react";
-import { MonitorRow, type MonitorRowData } from "@/components/monitor-row";
+import { type MonitorRowData } from "@/components/monitor-row";
+import { MonitorsTable } from "@/components/monitors-table";
 import { RunAllButton } from "@/components/run-all-button";
-import { recentChecksForSparkline } from "@/lib/stats";
 import { DeleteAllButton } from "@/components/delete-all-button";
+import { recentChecksForSparkline } from "@/lib/stats";
 
 export default async function MonitorsPage() {
   const user = await requireUser();
@@ -34,10 +35,9 @@ export default async function MonitorsPage() {
     },
   });
 
-    const activeCount = monitors.filter((m) => !m.isPaused).length;
-    const totalCount = monitors.length;
+  const activeCount = monitors.filter((m) => !m.isPaused).length;
+  const totalCount = monitors.length;
 
-  // Fetch sparkline data in parallel
   const sparklines = await Promise.all(
     monitors.map((m) => recentChecksForSparkline(m.id, 30))
   );
@@ -48,6 +48,8 @@ export default async function MonitorsPage() {
     type: m.type,
     target: m.target,
     intervalSeconds: m.intervalSeconds,
+    timeoutMs: m.timeoutMs,
+    expectedStatus: m.expectedStatus,
     isPaused: m.isPaused,
     createdAt: m.createdAt.toISOString(),
     last: m.checks[0]
@@ -63,7 +65,7 @@ export default async function MonitorsPage() {
 
   return (
     <>
-            <PageHeader
+      <PageHeader
         title="Monitors"
         description="All checks in your workspace."
         actions={
@@ -102,47 +104,9 @@ export default async function MonitorsPage() {
         </Card>
       ) : (
         <Card className="animate-fade-up overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
-                  <Th className="w-8" />
-                  <Th>Name</Th>
-                  <Th>Type</Th>
-                  <Th>Target</Th>
-                  <Th>Trend</Th>
-                  <Th>Latency</Th>
-                  <Th>Status</Th>
-                  <Th className="text-right pr-5">Actions</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <MonitorRow key={row.id} m={row} />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <MonitorsTable rows={rows} />
         </Card>
       )}
     </>
-  );
-}
-
-function Th({
-  children,
-  className,
-}: {
-  children?: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <th
-      className={`text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-subtle)] px-3 py-2.5 ${
-        className ?? ""
-      }`}
-    >
-      {children}
-    </th>
   );
 }
