@@ -43,39 +43,23 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
   const now = new Date();
   const nextCheckAt = new Date(now.getTime() + monitor.intervalSeconds * 1000);
 
-  // Query previous state OUTSIDE the transaction — no need for transactional
-  // consistency and this reduces the transaction's total round-trip time.
-  const previous = await prisma.check.findFirst({
-    where: { monitorId: monitor.id },
-    orderBy: { checkedAt: "desc" },
-    select: { status: true },
-  });
-
-  const wasUp = previous?.status === "UP" || previous == null;
-  const isUp = result.status === "UP";
-  const shouldOpenIncident = wasUp && !isUp;
-  const shouldResolveIncident = !wasUp && isUp;
-
-  // If we're going to resolve an incident, find it BEFORE the transaction.
-  let openIncidentId: string | null = null;
-  if (shouldResolveIncident) {
-    const open = await prisma.incident.findFirst({
-      where: { monitorId: monitor.id, resolvedAt: null },
-      orderBy: { startedAt: "desc" },
-      select: { id: true },
-    });
-    openIncidentId = open?.id ?? null;
-  }
-
   const transitions: {
     opened: OpenedIncident | null;
     resolved: ResolvedIncident | null;
   } = { opened: null, resolved: null };
 
-  // Transaction now only does WRITES — much faster, less likely to timeout.
-  // Also bumped timeout to 15s as safety margin.
+  // Everything in one transaction to reuse a single connection.
+  // Generous timeouts to survive occasional slow round-trips under load.
   await prisma.$transaction(
     async (tx) => {
+      // 1. Read previous status
+      const previous = await tx.check.findFirst({
+        where: { monitorId: monitor.id },
+        orderBy: { checkedAt: "desc" },
+        select: { status: true },
+      });
+
+      // 2. Insert new check
       await tx.check.create({
         data: {
           monitorId: monitor.id,
@@ -87,12 +71,17 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
         },
       });
 
+      // 3. Update monitor schedule
       await tx.monitor.update({
         where: { id: monitor.id },
         data: { lastCheckedAt: now, nextCheckAt },
       });
 
-      if (shouldOpenIncident) {
+      // 4. Incident state machine
+      const wasUp = previous?.status === "UP" || previous == null;
+      const isUp = result.status === "UP";
+
+      if (wasUp && !isUp) {
         const created = await tx.incident.create({
           data: {
             monitorId: monitor.id,
@@ -105,24 +94,31 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
           startedAt: created.startedAt,
           cause: created.cause,
         };
-      } else if (shouldResolveIncident && openIncidentId) {
-        const updated = await tx.incident.update({
-          where: { id: openIncidentId },
-          data: { resolvedAt: now },
+      } else if (!wasUp && isUp) {
+        const open = await tx.incident.findFirst({
+          where: { monitorId: monitor.id, resolvedAt: null },
+          orderBy: { startedAt: "desc" },
+          select: { id: true, startedAt: true, cause: true },
         });
-        if (updated.resolvedAt) {
-          transitions.resolved = {
-            id: updated.id,
-            startedAt: updated.startedAt,
-            resolvedAt: updated.resolvedAt,
-            cause: updated.cause,
-          };
+        if (open) {
+          const updated = await tx.incident.update({
+            where: { id: open.id },
+            data: { resolvedAt: now },
+          });
+          if (updated.resolvedAt) {
+            transitions.resolved = {
+              id: updated.id,
+              startedAt: updated.startedAt,
+              resolvedAt: updated.resolvedAt,
+              cause: updated.cause,
+            };
+          }
         }
       }
     },
     {
-      timeout: 15000, // Bump from default 5s to 15s
-      maxWait: 10000, // Bump from default 2s to 10s
+      timeout: 20000, // 20s ceiling per transaction
+      maxWait: 15000, // 15s to acquire a connection
     }
   );
 
