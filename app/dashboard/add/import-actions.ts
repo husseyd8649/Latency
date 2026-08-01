@@ -58,10 +58,15 @@ export async function importDomainsCsv(
     skipEmptyLines: true,
   });
 
-  if (parsed.errors.length > 0) {
+    // Filter out non-fatal warnings. papaparse emits a "Delimiter" warning for
+  // single-column files (like a bare domain list) which we can safely ignore.
+  const fatalErrors = parsed.errors.filter(
+    (e) => e.type !== "Delimiter" && e.code !== "UndetectableDelimiter"
+  );
+  if (fatalErrors.length > 0) {
     return {
       ok: false,
-      error: `CSV parse failed: ${parsed.errors[0].message}`,
+      error: `CSV parse failed: ${fatalErrors[0].message}`,
     };
   }
 
