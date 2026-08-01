@@ -44,7 +44,7 @@ export async function createMonitor(
       intervalSeconds: data.intervalSeconds,
       timeoutMs: data.timeoutMs,
       expectedStatus: data.type === "HTTP" ? data.expectedStatus : null,
-      nextCheckAt: new Date(), // eligible immediately (Phase 4 will use this)
+      nextCheckAt: new Date(),
     },
   });
 
@@ -84,7 +84,15 @@ export async function togglePause(formData: FormData) {
     data: { isPaused: !monitor.isPaused },
   });
 
-  export async function runAllMonitors(): Promise<void> {
+  revalidatePath("/dashboard/monitors");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * Mark every non-paused monitor as immediately due so the next cron tick
+ * processes them.
+ */
+export async function runAllMonitors(): Promise<void> {
   const user = await requireUser();
   const now = new Date();
 
@@ -97,10 +105,6 @@ export async function togglePause(formData: FormData) {
       nextCheckAt: now,
     },
   });
-
-  revalidatePath("/dashboard/monitors");
-  revalidatePath("/dashboard");
-}
 
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
