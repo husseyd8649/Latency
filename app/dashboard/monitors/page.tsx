@@ -12,6 +12,7 @@ import { Globe, PlusCircle } from "lucide-react";
 import { MonitorRow, type MonitorRowData } from "@/components/monitor-row";
 import { RunAllButton } from "@/components/run-all-button";
 import { recentChecksForSparkline } from "@/lib/stats";
+import { DeleteAllButton } from "@/components/delete-all-button";
 
 export default async function MonitorsPage() {
   const user = await requireUser();
@@ -33,7 +34,8 @@ export default async function MonitorsPage() {
     },
   });
 
-  const activeCount = monitors.filter((m) => !m.isPaused).length;
+    const activeCount = monitors.filter((m) => !m.isPaused).length;
+    const totalCount = monitors.length;
 
   // Fetch sparkline data in parallel
   const sparklines = await Promise.all(
@@ -61,11 +63,12 @@ export default async function MonitorsPage() {
 
   return (
     <>
-      <PageHeader
+            <PageHeader
         title="Monitors"
         description="All checks in your workspace."
         actions={
           <>
+            <DeleteAllButton count={totalCount} />
             <RunAllButton count={activeCount} />
             <Link href="/dashboard/add">
               <Button size="sm">
