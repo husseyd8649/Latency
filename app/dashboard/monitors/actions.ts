@@ -109,3 +109,18 @@ export async function runAllMonitors(): Promise<void> {
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
 }
+/**
+ * Delete every monitor owned by the current user. Cascades remove checks
+ * and incidents. Requires the client to have prompted for confirmation.
+ */
+export async function deleteAllMonitors(): Promise<{ deleted: number }> {
+  const user = await requireUser();
+
+  const result = await prisma.monitor.deleteMany({
+    where: { userId: user.id },
+  });
+
+  revalidatePath("/dashboard/monitors");
+  revalidatePath("/dashboard");
+  return { deleted: result.count };
+}
