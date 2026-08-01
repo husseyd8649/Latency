@@ -7,7 +7,7 @@ import { runMonitorCheck, runWithConcurrency } from "@/lib/checkers/runner";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CONCURRENCY = 10;
+const CONCURRENCY = 20;
 
 export async function POST(req: Request) {
   // Auth: expect "Authorization: Bearer <CRON_SECRET>"
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       OR: [{ nextCheckAt: null }, { nextCheckAt: { lte: now } }],
     },
     orderBy: { nextCheckAt: "asc" },
-    take: 200, // safety cap per invocation
+    take: 1000,
   });
 
   const startedAt = Date.now();
