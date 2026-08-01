@@ -6,6 +6,8 @@ import { requireUser } from "@/lib/auth-helpers";
 import { monitorSchema } from "@/lib/validation/monitor";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
+
 
 type ActionState = { error?: string; fieldErrors?: Record<string, string> };
 
@@ -125,7 +127,6 @@ export async function deleteAllMonitors(): Promise<{ deleted: number }> {
   return { deleted: result.count };
 }
 
-import { z } from "zod";
 
 // Edit schema — cannot change type (would break check history)
 const editSchema = z
