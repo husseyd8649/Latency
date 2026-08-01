@@ -66,11 +66,12 @@ export default async function MonitorsPage() {
 
   return (
     <>
-            <PageHeader
+      <PageHeader
         title="Monitors"
         description="All checks in your workspace."
         actions={
           <>
+            <BulkIntervalForm />
             <DeleteAllButton count={totalCount} />
             <RunAllButton count={activeCount} />
             <Link href="/dashboard/add">
@@ -112,6 +113,24 @@ export default async function MonitorsPage() {
   );
 }
 
+function Th({
+  children,
+  className,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <th
+      className={`text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-subtle)] px-3 py-2.5 ${
+        className ?? ""
+      }`}
+    >
+      {children}
+    </th>
+  );
+}
+
 function BulkIntervalForm() {
   return (
     <form action={bulkUpdateInterval} className="inline-flex items-center gap-1">
@@ -120,6 +139,7 @@ function BulkIntervalForm() {
         defaultValue="900"
         className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-xs text-[var(--text)]"
         aria-label="New interval"
+        title="Set interval for all monitors"
       >
         <option value="300">5 min</option>
         <option value="600">10 min</option>
