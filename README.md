@@ -15,7 +15,6 @@ Built as an MVP prototype end-to-end in a series of guided phases.
 
 ## Table of contents
 
-- [Screenshots](#screenshots)
 - [Features](#features)
 - [Tech stack](#tech-stack)
 - [Architecture](#architecture)
@@ -29,18 +28,6 @@ Built as an MVP prototype end-to-end in a series of guided phases.
 - [Known limitations and tech debt](#known-limitations-and-tech-debt)
 - [Roadmap](#roadmap)
 - [License](#license)
-
----
-
-## Screenshots
-
-> Add real screenshots here once you have them. Suggested captures:
->
-> - Landing page (dark + light)
-> - Dashboard overview
-> - Monitors table with sparklines
-> - Public status page at `/s/<slug>`
-> - Webhooks page with test button
 
 ---
 
