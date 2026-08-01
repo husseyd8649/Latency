@@ -1,0 +1,170 @@
+/* app/globals.css */
+@import "tailwindcss";
+
+/* -------------------------------------------------------------------------- */
+/*  Design tokens                                                              */
+/* -------------------------------------------------------------------------- */
+
+/* app/globals.css */
+@import "tailwindcss";
+
+/* -------------------------------------------------------------------------- */
+/*  Design tokens                                                              */
+/* -------------------------------------------------------------------------- */
+
+:root {
+  /* Warm cream light theme */
+  --bg: #FAF8F5;
+  --surface: #FFFFFF;
+  --surface-2: #F3ECE3;
+  --border: #E6DCD2;
+  --border-strong: #CDBCAC;
+  --text: #241E1A;
+  --text-muted: #6C5D53;
+  --text-subtle: #9E8D80;
+
+  --accent: oklch(67% 0.16 32);
+  --accent-hover: oklch(58% 0.17 32);           /* darker for light bg */
+  --accent-soft: oklch(96% 0.03 32);            /* faint coral blush */
+
+  --op-up: #10B981;
+  --op-degraded: #F59E0B;
+  --op-down: #EF4444;
+
+  --up-soft: #ECFDF5;
+  --degraded-soft: #FFFBEB;
+  --down-soft: #FEF2F2;
+
+  --ring: oklch(67% 0.16 32 / 0.35);
+  --shadow-sm: 0 1px 2px rgba(36, 30, 26, 0.03);
+  --shadow-md: 0 4px 16px rgba(36, 30, 26, 0.05);
+}
+
+.dark {
+  /* Deep slate dark theme */
+  --bg: #070A0F;
+  --surface: #0D111A;
+  --surface-2: #121824;
+  --border: #202938;
+  --border-strong: #2C3648;
+  --text: #F4F7FB;
+  --text-muted: #8B98AA;
+  --text-subtle: #5B6779;
+
+  --accent: oklch(67% 0.16 32);
+  --accent-hover: oklch(76% 0.15 32);           /* lighter for dark bg */
+  --accent-soft: oklch(67% 0.16 32 / 0.14);     /* translucent coral */
+
+  --op-up: #34D399;
+  --op-degraded: #FBBF24;
+  --op-down: #FB7185;
+
+  --up-soft: rgba(52, 211, 153, 0.10);
+  --degraded-soft: rgba(251, 191, 36, 0.10);
+  --down-soft: rgba(251, 113, 133, 0.10);
+
+  --ring: oklch(67% 0.16 32 / 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+/* -------------------------------------------------------------------------- */
+/*  Tailwind theme mapping                                                     */
+/* -------------------------------------------------------------------------- */
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-op-up: var(--op-up);
+  --color-op-degraded: var(--op-degraded);
+  --color-op-down: var(--op-down);
+
+  --color-up-soft: var(--up-soft);
+  --color-degraded-soft: var(--degraded-soft);
+  --color-down-soft: var(--down-soft);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Base                                                                       */
+/* -------------------------------------------------------------------------- */
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent);
+  color: #000;
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Animations                                                                 */
+/* -------------------------------------------------------------------------- */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.9); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes scan {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-fade-up { animation: fade-up 0.4s ease-out both; }
+.animate-pulse-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
+.animate-scan { animation: scan 3.5s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Utility helpers                                                            */
+/* -------------------------------------------------------------------------- */
+
+.grid-bg {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse at center, black 40%, transparent 75%);
+}
