@@ -84,6 +84,24 @@ export async function togglePause(formData: FormData) {
     data: { isPaused: !monitor.isPaused },
   });
 
+  export async function runAllMonitors(): Promise<void> {
+  const user = await requireUser();
+  const now = new Date();
+
+  await prisma.monitor.updateMany({
+    where: {
+      userId: user.id,
+      isPaused: false,
+    },
+    data: {
+      nextCheckAt: now,
+    },
+  });
+
+  revalidatePath("/dashboard/monitors");
+  revalidatePath("/dashboard");
+}
+
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
 }
