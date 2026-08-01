@@ -31,9 +31,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
+          attribute="data-theme"
+          defaultTheme="corporate"
+          themes={["corporate", "light", "dark"]}
+          enableSystem={false}
           disableTransitionOnChange
         >
           {children}
