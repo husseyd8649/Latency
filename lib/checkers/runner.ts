@@ -43,59 +43,71 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
   const now = new Date();
   const nextCheckAt = new Date(now.getTime() + monitor.intervalSeconds * 1000);
 
+  // Query previous state OUTSIDE the transaction — no need for transactional
+  // consistency and this reduces the transaction's total round-trip time.
   const previous = await prisma.check.findFirst({
     where: { monitorId: monitor.id },
     orderBy: { checkedAt: "desc" },
     select: { status: true },
   });
 
-  // Wrap in an object so TypeScript keeps the declared union type through the async callback
+  const wasUp = previous?.status === "UP" || previous == null;
+  const isUp = result.status === "UP";
+  const shouldOpenIncident = wasUp && !isUp;
+  const shouldResolveIncident = !wasUp && isUp;
+
+  // If we're going to resolve an incident, find it BEFORE the transaction.
+  let openIncidentId: string | null = null;
+  if (shouldResolveIncident) {
+    const open = await prisma.incident.findFirst({
+      where: { monitorId: monitor.id, resolvedAt: null },
+      orderBy: { startedAt: "desc" },
+      select: { id: true },
+    });
+    openIncidentId = open?.id ?? null;
+  }
+
   const transitions: {
     opened: OpenedIncident | null;
     resolved: ResolvedIncident | null;
   } = { opened: null, resolved: null };
 
-  await prisma.$transaction(async (tx) => {
-    await tx.check.create({
-      data: {
-        monitorId: monitor.id,
-        status: result.status,
-        responseTimeMs: result.responseTimeMs,
-        statusCode: result.statusCode,
-        error: result.error,
-        checkedAt: now,
-      },
-    });
-
-    await tx.monitor.update({
-      where: { id: monitor.id },
-      data: { lastCheckedAt: now, nextCheckAt },
-    });
-
-    const wasUp = previous?.status === "UP" || previous == null;
-    const isUp = result.status === "UP";
-
-    if (wasUp && !isUp) {
-      const created = await tx.incident.create({
+  // Transaction now only does WRITES — much faster, less likely to timeout.
+  // Also bumped timeout to 15s as safety margin.
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.check.create({
         data: {
           monitorId: monitor.id,
-          startedAt: now,
-          cause: result.error ?? "Check failed",
+          status: result.status,
+          responseTimeMs: result.responseTimeMs,
+          statusCode: result.statusCode,
+          error: result.error,
+          checkedAt: now,
         },
       });
-      transitions.opened = {
-        id: created.id,
-        startedAt: created.startedAt,
-        cause: created.cause,
-      };
-    } else if (!wasUp && isUp) {
-      const open = await tx.incident.findFirst({
-        where: { monitorId: monitor.id, resolvedAt: null },
-        orderBy: { startedAt: "desc" },
+
+      await tx.monitor.update({
+        where: { id: monitor.id },
+        data: { lastCheckedAt: now, nextCheckAt },
       });
-      if (open) {
+
+      if (shouldOpenIncident) {
+        const created = await tx.incident.create({
+          data: {
+            monitorId: monitor.id,
+            startedAt: now,
+            cause: result.error ?? "Check failed",
+          },
+        });
+        transitions.opened = {
+          id: created.id,
+          startedAt: created.startedAt,
+          cause: created.cause,
+        };
+      } else if (shouldResolveIncident && openIncidentId) {
         const updated = await tx.incident.update({
-          where: { id: open.id },
+          where: { id: openIncidentId },
           data: { resolvedAt: now },
         });
         if (updated.resolvedAt) {
@@ -107,12 +119,16 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
           };
         }
       }
+    },
+    {
+      timeout: 15000, // Bump from default 5s to 15s
+      maxWait: 10000, // Bump from default 2s to 10s
     }
-  });
+  );
 
   // Fire webhooks after commit (fire-and-forget)
-  if (transitions.opened) {
-    const o = transitions.opened;
+  const opened = transitions.opened;
+  if (opened) {
     fanOutEvent(monitor.userId, "incident.started", {
       monitor: {
         id: monitor.id,
@@ -121,16 +137,16 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
         target: monitor.target,
       },
       incident: {
-        id: o.id,
-        startedAt: o.startedAt.toISOString(),
+        id: opened.id,
+        startedAt: opened.startedAt.toISOString(),
         resolvedAt: null,
-        cause: o.cause,
+        cause: opened.cause,
       },
     });
   }
 
-  if (transitions.resolved) {
-    const r = transitions.resolved;
+  const resolved = transitions.resolved;
+  if (resolved) {
     fanOutEvent(monitor.userId, "incident.resolved", {
       monitor: {
         id: monitor.id,
@@ -139,10 +155,10 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
         target: monitor.target,
       },
       incident: {
-        id: r.id,
-        startedAt: r.startedAt.toISOString(),
-        resolvedAt: r.resolvedAt.toISOString(),
-        cause: r.cause,
+        id: resolved.id,
+        startedAt: resolved.startedAt.toISOString(),
+        resolvedAt: resolved.resolvedAt.toISOString(),
+        cause: resolved.cause,
       },
     });
   }
