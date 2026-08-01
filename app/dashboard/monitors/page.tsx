@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/primitives";
 import { Globe, PlusCircle } from "lucide-react";
 import { MonitorRow, type MonitorRowData } from "@/components/monitor-row";
+import { RunAllButton } from "@/components/run-all-button";
 import { recentChecksForSparkline } from "@/lib/stats";
 
 export default async function MonitorsPage() {
@@ -31,6 +32,8 @@ export default async function MonitorsPage() {
       },
     },
   });
+
+  const activeCount = monitors.filter((m) => !m.isPaused).length;
 
   // Fetch sparkline data in parallel
   const sparklines = await Promise.all(
@@ -58,7 +61,7 @@ export default async function MonitorsPage() {
 
   return (
     <>
-            <PageHeader
+      <PageHeader
         title="Monitors"
         description="All checks in your workspace."
         actions={
@@ -80,7 +83,9 @@ export default async function MonitorsPage() {
             <div className="w-12 h-12 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center mx-auto mb-4">
               <Globe className="w-5 h-5 text-[var(--text-subtle)]" />
             </div>
-            <div className="text-sm font-medium text-[var(--text)]">No monitors yet</div>
+            <div className="text-sm font-medium text-[var(--text)]">
+              No monitors yet
+            </div>
             <div className="text-xs text-[var(--text-muted)] mt-1 mb-5">
               Add your first HTTP, TCP or SSL check to start monitoring.
             </div>
@@ -121,7 +126,13 @@ export default async function MonitorsPage() {
   );
 }
 
-function Th({ children, className }: { children?: React.ReactNode; className?: string }) {
+function Th({
+  children,
+  className,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) {
   return (
     <th
       className={`text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-subtle)] px-3 py-2.5 ${
