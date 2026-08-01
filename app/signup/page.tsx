@@ -19,7 +19,7 @@ export default function SignUpPage() {
       <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
 
       <Link href="/" className="relative flex items-center gap-2 mb-8">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center">
           <Zap className="w-4 h-4 text-white" strokeWidth={2.5} />
         </div>
         <span className="text-lg font-semibold tracking-tight">Latency</span>
