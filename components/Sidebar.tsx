@@ -37,7 +37,7 @@ export function Sidebar({ userEmail }: { userEmail?: string | null }) {
       {/* Brand */}
       <div className="px-5 pt-5 pb-4 flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] flex items-center justify-center shadow-[var(--shadow-sm)]">
+          <div className="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center">
             <Zap className="w-4 h-4 text-white" strokeWidth={2.5} />
           </div>
           <div>
@@ -72,7 +72,7 @@ export function Sidebar({ userEmail }: { userEmail?: string | null }) {
               )}
             >
               {active && (
-                <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-[var(--accent)] shadow-[0_0_10px_var(--accent)]" />
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-[var(--accent)]" />
               )}
               <Icon className="w-4 h-4" />
               {item.label}
