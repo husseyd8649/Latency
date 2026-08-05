@@ -16,53 +16,85 @@ import { DeleteAllButton } from "@/components/delete-all-button";
 import { recentChecksForSparkline } from "@/lib/stats";
 import { bulkUpdateInterval } from "./actions";
 
+type LatestCheckRow = {
+  monitorId: string;
+  status: "UP" | "DOWN";
+  responseTimeMs: number | null;
+  checkedAt: Date;
+  error: string | null;
+};
+
 export default async function MonitorsPage() {
   const user = await requireUser();
 
   const monitors = await prisma.monitor.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
-    include: {
-      checks: {
-        orderBy: { checkedAt: "desc" },
-        take: 1,
-        select: {
-          status: true,
-          responseTimeMs: true,
-          checkedAt: true,
-          error: true,
-        },
-      },
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      target: true,
+      intervalSeconds: true,
+      timeoutMs: true,
+      expectedStatus: true,
+      isPaused: true,
+      createdAt: true,
     },
   });
 
   const activeCount = monitors.filter((m) => !m.isPaused).length;
   const totalCount = monitors.length;
+  const monitorIds = monitors.map((m) => m.id);
+
+  // Fetch ONLY the latest check per monitor in a single efficient query.
+  // Prisma's include+take:1 loads all rows into memory — this uses DISTINCT ON.
+  const latestChecks =
+    monitorIds.length > 0
+      ? await prisma.$queryRaw<LatestCheckRow[]>`
+          SELECT DISTINCT ON ("monitorId")
+            "monitorId",
+            "status"::text as status,
+            "responseTimeMs",
+            "checkedAt",
+            "error"
+          FROM "Check"
+          WHERE "monitorId" = ANY(${monitorIds}::text[])
+          ORDER BY "monitorId", "checkedAt" DESC
+        `
+      : [];
+
+  const latestByMonitor = new Map(
+    latestChecks.map((c) => [c.monitorId, c])
+  );
 
   const sparklines = await Promise.all(
     monitors.map((m) => recentChecksForSparkline(m.id, 30))
   );
 
-  const rows: MonitorRowData[] = monitors.map((m, i) => ({
-    id: m.id,
-    name: m.name,
-    type: m.type,
-    target: m.target,
-    intervalSeconds: m.intervalSeconds,
-    timeoutMs: m.timeoutMs,
-    expectedStatus: m.expectedStatus,
-    isPaused: m.isPaused,
-    createdAt: m.createdAt.toISOString(),
-    last: m.checks[0]
-      ? {
-          status: m.checks[0].status,
-          responseTimeMs: m.checks[0].responseTimeMs,
-          checkedAt: m.checks[0].checkedAt.toISOString(),
-          error: m.checks[0].error,
-        }
-      : null,
-    sparkline: sparklines[i],
-  }));
+  const rows: MonitorRowData[] = monitors.map((m, i) => {
+    const latest = latestByMonitor.get(m.id);
+    return {
+      id: m.id,
+      name: m.name,
+      type: m.type,
+      target: m.target,
+      intervalSeconds: m.intervalSeconds,
+      timeoutMs: m.timeoutMs,
+      expectedStatus: m.expectedStatus,
+      isPaused: m.isPaused,
+      createdAt: m.createdAt.toISOString(),
+      last: latest
+        ? {
+            status: latest.status,
+            responseTimeMs: latest.responseTimeMs,
+            checkedAt: latest.checkedAt.toISOString(),
+            error: latest.error,
+          }
+        : null,
+      sparkline: sparklines[i],
+    };
+  });
 
   return (
     <>
@@ -110,24 +142,6 @@ export default async function MonitorsPage() {
         </Card>
       )}
     </>
-  );
-}
-
-function Th({
-  children,
-  className,
-}: {
-  children?: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <th
-      className={`text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-subtle)] px-3 py-2.5 ${
-        className ?? ""
-      }`}
-    >
-      {children}
-    </th>
   );
 }
 
