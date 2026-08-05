@@ -1,7 +1,7 @@
 // components/monitor-row.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Globe,
   Network,
@@ -79,9 +79,10 @@ export function MonitorRow({ m }: { m: MonitorRowData }) {
         <td className="px-3 py-3 align-middle">
           <div className="font-medium text-[var(--text)]">{m.name}</div>
           <div className="text-[10px] text-[var(--text-subtle)] mt-0.5">
-            {m.last
-              ? `Last check ${formatRelative(new Date(m.last.checkedAt))}`
-              : `Created ${formatRelative(new Date(m.createdAt))}`}
+            <RelativeTime
+              iso={m.last ? m.last.checkedAt : m.createdAt}
+              prefix={m.last ? "Last check" : "Created"}
+            />
           </div>
         </td>
         <td className="px-3 py-3 align-middle">
@@ -185,6 +186,31 @@ export function MonitorRow({ m }: { m: MonitorRowData }) {
 }
 
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Client-only relative time renderer.
+ * Renders nothing on the server to avoid hydration mismatch, then fills in
+ * on mount and refreshes every 30 seconds.
+ */
+function RelativeTime({ iso, prefix }: { iso: string; prefix: string }) {
+  const [text, setText] = useState<string | null>(null);
+
+  useEffect(() => {
+    const update = () => setText(formatRelative(new Date(iso)));
+    update();
+    const interval = setInterval(update, 30000);
+    return () => clearInterval(interval);
+  }, [iso]);
+
+  if (text === null) {
+    return <span>&nbsp;</span>;
+  }
+  return (
+    <span>
+      {prefix} {text}
+    </span>
+  );
+}
 
 function deriveState(paused: boolean, last?: "UP" | "DOWN") {
   if (paused) return { dot: "neutral" as const, badge: "neutral" as const, label: "Paused" };
