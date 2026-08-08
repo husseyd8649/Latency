@@ -17,6 +17,7 @@ model User {
   passwordHash  String?
   accounts      Account[]
   monitors      Monitor[]
+  regions   Region[]
   sessions      Session[]
   statusPages   StatusPage[]
   webhooks      Webhook[]
@@ -69,12 +70,31 @@ model Monitor {
   lastCheckedAt   DateTime?
   nextCheckAt     DateTime?
   createdAt       DateTime    @default(now())
+  regionId    String?
+  region      Region?  @relation(fields: [regionId], references: [id])
   checks          Check[]
   incidents       Incident[]
   user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([nextCheckAt])
+  @@index([regionId])
+}
+
+model Region {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  slug      String
+  color     String    @default("#6366f1")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monitors  Monitor[]
+
+  @@unique([userId, slug])
+  @@index([userId])
 }
 
 model Check {
