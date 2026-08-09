@@ -1,4 +1,3 @@
-// components/import-csv-form.tsx
 "use client";
 
 import { useActionState, useState } from "react";
@@ -6,6 +5,13 @@ import { Upload, Loader2, FileText, CheckCircle2, AlertTriangle } from "lucide-r
 import { Button, Badge } from "@/components/ui/primitives";
 import { importDomainsCsv } from "@/app/dashboard/add/import-actions";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
+
+type Region = {
+  id: string;
+  name: string;
+  color: string;
+};
 
 const initial = {} as
   | { ok?: false; error?: string }
@@ -17,10 +23,11 @@ const initial = {} as
         invalid: { line: number; value: string; reason: string }[];
         total: number;
         intervalSeconds: number;
+        regionName: string | null;
       };
     };
 
-export function ImportCsvForm() {
+export function ImportCsvForm({ regions = [] }: { regions?: Region[] }) {
   const [state, formAction, pending] = useActionState(importDomainsCsv, initial);
   const [fileName, setFileName] = useState<string | null>(null);
 
@@ -41,6 +48,9 @@ export function ImportCsvForm() {
               {r.skippedDuplicate} skipped as duplicate ·{" "}
               {r.invalid.length} invalid · {r.total} total rows ·{" "}
               interval {formatInterval(r.intervalSeconds)}
+              {r.regionName && (
+                <> · region <span className="font-medium text-[var(--text)]">{r.regionName}</span></>
+              )}
             </div>
             <div className="mt-4 flex gap-2">
               <Link href="/dashboard/monitors">
@@ -97,6 +107,7 @@ export function ImportCsvForm() {
 
   return (
     <form action={formAction} className="space-y-5">
+      {/* File upload */}
       <div>
         <label className="block text-xs font-medium text-[var(--text)] mb-2">
           CSV file
@@ -131,6 +142,32 @@ export function ImportCsvForm() {
         </label>
       </div>
 
+      {/* Default region */}
+      {regions.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-[var(--text)] mb-1.5">
+            Default region
+          </label>
+          <select
+            name="defaultRegionId"
+            defaultValue=""
+            className="w-full h-10 rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 text-sm text-[var(--text)] focus:border-[var(--accent)] transition-colors"
+          >
+            <option value="">No region (ungrouped)</option>
+            {regions.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          <div className="text-[10px] text-[var(--text-subtle)] mt-1">
+            Applied to all rows. Override per-row by adding a{" "}
+            <span className="font-mono">region</span> column to your CSV.
+          </div>
+        </div>
+      )}
+
+      {/* Interval */}
       <div>
         <label className="block text-xs font-medium text-[var(--text)] mb-1.5">
           Check interval (seconds)
@@ -151,11 +188,33 @@ export function ImportCsvForm() {
         </div>
       </div>
 
+      {/* Error */}
       {state && "ok" in state && state.ok === false && state.error && (
         <div className="rounded-md border border-[var(--op-down)]/30 bg-[var(--down-soft)] px-3 py-2 text-xs text-[var(--op-down)]">
           {state.error}
         </div>
       )}
+
+      {/* CSV format hint */}
+      <div className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-[10px] text-[var(--text-subtle)] space-y-1">
+        <div className="font-medium text-[var(--text-muted)] mb-1">CSV format</div>
+        <div>
+          Required column:{" "}
+          <span className="font-mono text-[var(--text)]">domain</span>,{" "}
+          <span className="font-mono text-[var(--text)]">url</span>, or{" "}
+          <span className="font-mono text-[var(--text)]">host</span>
+        </div>
+        <div>
+          Optional column:{" "}
+          <span className="font-mono text-[var(--text)]">region</span>{" "}
+          — must match an existing region name exactly
+        </div>
+        <div className="font-mono text-[var(--text)] pt-0.5">
+          domain,region<br />
+          example.com,US East<br />
+          api.example.com,EU West
+        </div>
+      </div>
 
       <div className="flex items-center justify-between pt-2">
         <div className="text-[10px] text-[var(--text-subtle)]">

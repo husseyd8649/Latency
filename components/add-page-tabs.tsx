@@ -39,8 +39,7 @@ export function AddPageTabs({ regions = [] }: { regions?: Region[] }) {
           {tab === "single" ? (
             <MonitorForm regions={regions} />
           ) : (
-            <ImportCsvForm />
-          )}
+            <ImportCsvForm regions={regions} />          )}
         </CardBody>
       </Card>
     </>
