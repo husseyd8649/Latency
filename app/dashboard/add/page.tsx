@@ -1,10 +1,16 @@
-// app/dashboard/add/page.tsx
-import { Card, CardBody, PageHeader } from "@/components/ui/primitives";
-import { MonitorForm } from "@/components/monitor-form";
-import { ImportCsvForm } from "@/components/import-csv-form";
+import { PageHeader } from "@/components/ui/primitives";
 import { AddPageTabs } from "@/components/add-page-tabs";
+import { getRegions } from "@/app/dashboard/regions/actions";
 
-export default function AddPage() {
+export default async function AddPage() {
+  const regions = await getRegions();
+
+  const regionList = regions.map((r) => ({
+    id: r.id,
+    name: r.name,
+    color: r.color,
+  }));
+
   return (
     <>
       <PageHeader
@@ -12,7 +18,7 @@ export default function AddPage() {
         description="Create a single monitor manually, or bulk-import a CSV of domains."
       />
       <div className="max-w-2xl">
-        <AddPageTabs />
+        <AddPageTabs regions={regionList} />
       </div>
     </>
   );

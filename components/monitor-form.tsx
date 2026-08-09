@@ -1,13 +1,18 @@
-// components/monitor-form.tsx
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect } from "react";
 import { Globe, Network, ShieldCheck, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/primitives";
 import { createMonitor } from "@/app/dashboard/monitors/actions";
 
 type MonitorType = "HTTP" | "TCP" | "SSL";
+
+type Region = {
+  id: string;
+  name: string;
+  color: string;
+};
 
 const tabs: { key: MonitorType; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
   { key: "HTTP", label: "HTTP", icon: Globe, desc: "URL endpoint check" },
@@ -17,7 +22,7 @@ const tabs: { key: MonitorType; label: string; icon: React.ComponentType<{ class
 
 const initialState = {} as { error?: string; fieldErrors?: Record<string, string> };
 
-export function MonitorForm() {
+export function MonitorForm({ regions = [] }: { regions?: Region[] }) {
   const [type, setType] = useState<MonitorType>("HTTP");
   const [state, formAction, pending] = useActionState(createMonitor, initialState);
 
@@ -137,6 +142,22 @@ export function MonitorForm() {
           </Field>
         )}
 
+        {/* Region */}
+        <Field label="Region" hint="Optional — group this monitor by region" error={err("regionId")}>
+          <select
+            name="regionId"
+            defaultValue=""
+            className={selectCls(!!err("regionId"))}
+          >
+            <option value="">No region (ungrouped)</option>
+            {regions.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
         {/* Interval + timeout */}
         <div className="grid grid-cols-2 gap-4">
           <Field label="Interval (seconds)" hint="How often to check" error={err("intervalSeconds")}>
@@ -217,6 +238,17 @@ function Field({
 function inputCls(hasError: boolean) {
   return cn(
     "w-full h-10 rounded-md border bg-[var(--bg)] px-3 text-sm font-mono text-[var(--text)] placeholder:text-[var(--text-subtle)] transition-colors",
+    hasError
+      ? "border-[var(--op-down)]/50 focus:border-[var(--op-down)]"
+      : "border-[var(--border)] focus:border-[var(--accent)]"
+  );
+}
+
+function selectCls(hasError: boolean) {
+  return cn(
+    "w-full h-10 rounded-md border bg-[var(--bg)] px-3 text-sm text-[var(--text)] transition-colors appearance-none",
+    "bg-[length:16px_16px] bg-[position:right_12px_center] bg-no-repeat",
+    "bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236B7280%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')]",
     hasError
       ? "border-[var(--op-down)]/50 focus:border-[var(--op-down)]"
       : "border-[var(--border)] focus:border-[var(--accent)]"

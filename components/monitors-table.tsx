@@ -1,4 +1,3 @@
-// components/monitors-table.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -16,6 +15,12 @@ type SortKey =
   | null;
 type SortDir = "asc" | "desc";
 
+type Region = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 const STATUS_ORDER: Record<string, number> = {
   down: 0,
   degraded: 1,
@@ -30,7 +35,13 @@ function statusKey(m: MonitorRowData): string {
   return m.last.status.toLowerCase();
 }
 
-export function MonitorsTable({ rows }: { rows: MonitorRowData[] }) {
+export function MonitorsTable({
+  rows,
+  regions = [],
+}: {
+  rows: MonitorRowData[];
+  regions?: Region[];
+}) {
   const [sortKey, setSortKey] = useState<SortKey>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
@@ -42,7 +53,6 @@ export function MonitorsTable({ rows }: { rows: MonitorRowData[] }) {
       const av = sortValue(a, sortKey);
       const bv = sortValue(b, sortKey);
 
-      // Nulls always last, regardless of direction
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
@@ -64,7 +74,6 @@ export function MonitorsTable({ rows }: { rows: MonitorRowData[] }) {
     } else if (sortDir === "asc") {
       setSortDir("desc");
     } else {
-      // Third click clears sort
       setSortKey(null);
       setSortDir("asc");
     }
@@ -112,7 +121,7 @@ export function MonitorsTable({ rows }: { rows: MonitorRowData[] }) {
         </thead>
         <tbody>
           {sorted.map((row) => (
-            <MonitorRow key={row.id} m={row} />
+            <MonitorRow key={row.id} m={row} regions={regions} />
           ))}
         </tbody>
       </table>

@@ -36,6 +36,18 @@ export async function createMonitor(
 
   const data = parsed.data;
 
+    const regionId = (formData.get("regionId") as string) || null;
+
+  // Verify region belongs to user if provided
+  if (regionId) {
+    const region = await prisma.region.findFirst({
+      where: { id: regionId, userId: user.id },
+    });
+    if (!region) {
+      return { error: "Selected region not found" };
+    }
+  }
+
   await prisma.monitor.create({
     data: {
       userId: user.id,
@@ -46,6 +58,7 @@ export async function createMonitor(
       timeoutMs: data.timeoutMs,
       expectedStatus: data.type === "HTTP" ? data.expectedStatus : null,
       nextCheckAt: new Date(),
+      regionId,
     },
   });
 
@@ -194,6 +207,18 @@ export async function editMonitor(
   });
   if (!existing) return { error: "Monitor not found." };
 
+    const regionId = (formData.get("regionId") as string) || null;
+
+  // Verify region belongs to user if provided
+  if (regionId) {
+    const region = await prisma.region.findFirst({
+      where: { id: regionId, userId: user.id },
+    });
+    if (!region) {
+      return { error: "Selected region not found" };
+    }
+  }
+
   await prisma.monitor.update({
     where: { id: parsed.data.id },
     data: {
@@ -203,6 +228,7 @@ export async function editMonitor(
       timeoutMs: parsed.data.timeoutMs,
       expectedStatus:
         existing.type === "HTTP" ? parsed.data.expectedStatus ?? 200 : null,
+      regionId,
     },
   });
 

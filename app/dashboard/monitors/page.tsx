@@ -1,4 +1,3 @@
-// app/dashboard/monitors/page.tsx
 import Link from "next/link";
 import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
@@ -27,28 +26,34 @@ type LatestCheckRow = {
 export default async function MonitorsPage() {
   const user = await requireUser();
 
-  const monitors = await prisma.monitor.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      target: true,
-      intervalSeconds: true,
-      timeoutMs: true,
-      expectedStatus: true,
-      isPaused: true,
-      createdAt: true,
-    },
-  });
+  const [monitors, regions] = await Promise.all([
+    prisma.monitor.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        target: true,
+        intervalSeconds: true,
+        timeoutMs: true,
+        expectedStatus: true,
+        isPaused: true,
+        createdAt: true,
+        regionId: true,
+      },
+    }),
+    prisma.region.findMany({
+      where: { userId: user.id },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, color: true },
+    }),
+  ]);
 
   const activeCount = monitors.filter((m) => !m.isPaused).length;
   const totalCount = monitors.length;
   const monitorIds = monitors.map((m) => m.id);
 
-  // Fetch ONLY the latest check per monitor in a single efficient query.
-  // Prisma's include+take:1 loads all rows into memory — this uses DISTINCT ON.
   const latestChecks =
     monitorIds.length > 0
       ? await prisma.$queryRaw<LatestCheckRow[]>`
@@ -84,6 +89,7 @@ export default async function MonitorsPage() {
       expectedStatus: m.expectedStatus,
       isPaused: m.isPaused,
       createdAt: m.createdAt.toISOString(),
+      regionId: m.regionId,
       last: latest
         ? {
             status: latest.status,
@@ -138,7 +144,7 @@ export default async function MonitorsPage() {
         </Card>
       ) : (
         <Card className="animate-fade-up overflow-hidden">
-          <MonitorsTable rows={rows} />
+          <MonitorsTable rows={rows} regions={regions} />
         </Card>
       )}
     </>

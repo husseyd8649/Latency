@@ -1,4 +1,3 @@
-// components/add-page-tabs.tsx
 "use client";
 
 import { useState } from "react";
@@ -10,7 +9,13 @@ import { PlusCircle, Upload } from "lucide-react";
 
 type Tab = "single" | "import";
 
-export function AddPageTabs() {
+type Region = {
+  id: string;
+  name: string;
+  color: string;
+};
+
+export function AddPageTabs({ regions = [] }: { regions?: Region[] }) {
   const [tab, setTab] = useState<Tab>("single");
 
   return (
@@ -30,7 +35,13 @@ export function AddPageTabs() {
         />
       </div>
       <Card>
-        <CardBody>{tab === "single" ? <MonitorForm /> : <ImportCsvForm />}</CardBody>
+        <CardBody>
+          {tab === "single" ? (
+            <MonitorForm regions={regions} />
+          ) : (
+            <ImportCsvForm />
+          )}
+        </CardBody>
       </Card>
     </>
   );

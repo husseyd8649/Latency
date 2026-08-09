@@ -1,4 +1,3 @@
-// components/monitor-row.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -26,6 +25,12 @@ const typeIconMap = {
   SSL: ShieldCheck,
 } as const;
 
+type Region = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 export type MonitorRowData = {
   id: string;
   name: string;
@@ -36,6 +41,7 @@ export type MonitorRowData = {
   expectedStatus: number | null;
   isPaused: boolean;
   createdAt: string;
+  regionId: string | null;
   last: {
     status: "UP" | "DOWN";
     responseTimeMs: number | null;
@@ -45,7 +51,13 @@ export type MonitorRowData = {
   sparkline: { t: number; v: number | null }[];
 };
 
-export function MonitorRow({ m }: { m: MonitorRowData }) {
+export function MonitorRow({
+  m,
+  regions = [],
+}: {
+  m: MonitorRowData;
+  regions?: Region[];
+}) {
   const [simulated, setSimulated] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -63,6 +75,7 @@ export function MonitorRow({ m }: { m: MonitorRowData }) {
     intervalSeconds: m.intervalSeconds,
     timeoutMs: m.timeoutMs,
     expectedStatus: m.expectedStatus,
+    regionId: m.regionId,
   };
 
   return (
@@ -180,6 +193,7 @@ export function MonitorRow({ m }: { m: MonitorRowData }) {
         monitor={editable}
         open={editing}
         onClose={() => setEditing(false)}
+        regions={regions}
       />
     </>
   );
@@ -187,11 +201,6 @@ export function MonitorRow({ m }: { m: MonitorRowData }) {
 
 /* -------------------------------------------------------------------------- */
 
-/**
- * Client-only relative time renderer.
- * Renders nothing on the server to avoid hydration mismatch, then fills in
- * on mount and refreshes every 30 seconds.
- */
 function RelativeTime({ iso, prefix }: { iso: string; prefix: string }) {
   const [text, setText] = useState<string | null>(null);
 
@@ -220,6 +229,17 @@ function deriveState(paused: boolean, last?: "UP" | "DOWN") {
 }
 
 function formatRelative(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function formatRelative2(date: Date): string {
   const diff = Date.now() - date.getTime();
   const secs = Math.floor(diff / 1000);
   if (secs < 60) return `${secs}s ago`;
