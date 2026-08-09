@@ -14,6 +14,7 @@ import {
   Zap,
   User,
   Webhook,
+  MapPin, 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/dashboard/incidents", label: "Incidents", icon: AlertTriangle },
   { href: "/dashboard/status", label: "Status", icon: Globe },
   { href: "/dashboard/webhooks", label: "Webhooks", icon: Webhook },
+  { href: "/dashboard/regions", label: "Regions", icon: MapPin },
   { href: "/dashboard/architecture", label: "Architecture", icon: Network },
   { href: "/dashboard/account", label: "Account", icon: User },
 ];
