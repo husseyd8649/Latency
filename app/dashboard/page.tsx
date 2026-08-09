@@ -1,4 +1,3 @@
-// app/dashboard/page.tsx
 import {
   Card,
   CardBody,
@@ -21,33 +20,158 @@ import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { avgLatency, hourlyLatency, uptimeForMonitors } from "@/lib/stats";
 import { UptimeChart } from "@/components/uptime-chart";
+import { SystemHealthDonut } from "@/components/system-health-donut";
+import { MiniDonut } from "@/components/mini-donut";
+import { RegionalHealth } from "@/components/regional-health";
+
+type LatestCheckRow = {
+  monitorId: string;
+  status: string;
+};
 
 export default async function OverviewPage() {
   const user = await requireUser();
 
   const monitors = await prisma.monitor.findMany({
     where: { userId: user.id },
-    select: { id: true, name: true },
+    select: { id: true, name: true, isPaused: true, regionId: true },
   });
   const monitorIds = monitors.map((m) => m.id);
 
-  const [activeIncidentCount, uptime, avgMs, hourly, recentIncidents] =
-    await Promise.all([
-      prisma.incident.count({
-        where: { resolvedAt: null, monitor: { userId: user.id } },
-      }),
-      uptimeForMonitors(monitorIds, 24),
-      avgLatency(monitorIds, 24),
-      hourlyLatency(monitorIds),
-      prisma.incident.findMany({
-        where: { monitor: { userId: user.id } },
-        orderBy: { startedAt: "desc" },
-        take: 5,
-        include: { monitor: { select: { name: true, type: true } } },
-      }),
-    ]);
+  const [
+    activeIncidentCount,
+    uptime,
+    avgMs,
+    hourly,
+    recentIncidents,
+    regions,
+    latestChecks,
+    incidentCounts,
+  ] = await Promise.all([
+    prisma.incident.count({
+      where: { resolvedAt: null, monitor: { userId: user.id } },
+    }),
+    uptimeForMonitors(monitorIds, 24),
+    avgLatency(monitorIds, 24),
+    hourlyLatency(monitorIds),
+    prisma.incident.findMany({
+      where: { monitor: { userId: user.id } },
+      orderBy: { startedAt: "desc" },
+      take: 5,
+      include: { monitor: { select: { name: true, type: true } } },
+    }),
+    prisma.region.findMany({
+      where: { userId: user.id },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true, color: true },
+    }),
+    monitorIds.length > 0
+      ? prisma.$queryRaw<LatestCheckRow[]>`
+          SELECT DISTINCT ON ("monitorId")
+            "monitorId",
+            "status"::text as status
+          FROM "Check"
+          WHERE "monitorId" = ANY(${monitorIds}::text[])
+          ORDER BY "monitorId", "checkedAt" DESC
+        `
+      : ([] as LatestCheckRow[]),
+    monitorIds.length > 0
+      ? prisma.incident.groupBy({
+          by: ["monitorId"],
+          where: {
+            resolvedAt: null,
+            monitorId: { in: monitorIds },
+          },
+          _count: { _all: true },
+        })
+      : [],
+  ]);
 
-  const allOk = activeIncidentCount === 0;
+  const statusByMonitor = new Map(
+    latestChecks.map((c) => [c.monitorId, c.status])
+  );
+
+  const incidentsByMonitor = new Map(
+    incidentCounts.map((ic) => [ic.monitorId, ic._count._all])
+  );
+
+  // -- Build regional health data --
+  type RegionBucket = {
+    id: string | null;
+    name: string;
+    slug: string;
+    color: string;
+    total: number;
+    up: number;
+    down: number;
+    paused: number;
+    activeIncidents: number;
+  };
+
+  const regionMap = new Map<string, RegionBucket>();
+
+  // Init buckets for each user region
+  for (const r of regions) {
+    regionMap.set(r.id, {
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      color: r.color,
+      total: 0,
+      up: 0,
+      down: 0,
+      paused: 0,
+      activeIncidents: 0,
+    });
+  }
+
+  // Init ungrouped bucket
+  const ungroupedKey = "__ungrouped__";
+  regionMap.set(ungroupedKey, {
+    id: null,
+    name: "Ungrouped",
+    slug: "ungrouped",
+    color: "var(--text-subtle)",
+    total: 0,
+    up: 0,
+    down: 0,
+    paused: 0,
+    activeIncidents: 0,
+  });
+
+  // Populate buckets
+  for (const m of monitors) {
+    const bucketKey = m.regionId ?? ungroupedKey;
+    const bucket = regionMap.get(bucketKey);
+    if (!bucket) continue;
+
+    bucket.total += 1;
+
+    if (m.isPaused) {
+      bucket.paused += 1;
+    } else {
+      const status = statusByMonitor.get(m.id);
+      if (status === "UP") bucket.up += 1;
+      else if (status === "DOWN") bucket.down += 1;
+    }
+
+    bucket.activeIncidents += incidentsByMonitor.get(m.id) ?? 0;
+  }
+
+  // Convert to array, filter out empty ungrouped
+  const regionalData = Array.from(regionMap.values()).filter(
+    (r) => r.id !== null || r.total > 0
+  );
+
+  // -- Stat cards --
+  const uptimeColor =
+    uptime.uptimePct == null
+      ? "var(--text-subtle)"
+      : uptime.uptimePct >= 99
+      ? "var(--op-up)"
+      : uptime.uptimePct >= 95
+      ? "var(--op-degraded)"
+      : "var(--op-down)";
 
   const stats = [
     {
@@ -61,24 +185,31 @@ export default async function OverviewPage() {
           ? "No data yet"
           : `${uptime.upChecks}/${uptime.totalChecks} checks`,
       icon: TrendingUp,
+      miniDonut:
+        uptime.uptimePct != null
+          ? { value: uptime.uptimePct, color: uptimeColor }
+          : null,
     },
     {
       label: "Monitors",
       value: String(monitors.length),
       delta: monitors.length === 0 ? "Add your first" : "Active",
       icon: Activity,
+      miniDonut: null,
     },
     {
       label: "Active incidents",
       value: String(activeIncidentCount),
-      delta: allOk ? "All clear" : "Attention required",
+      delta: activeIncidentCount === 0 ? "All clear" : "Attention required",
       icon: Zap,
+      miniDonut: null,
     },
     {
       label: "Avg. latency (24h)",
       value: avgMs == null ? "—" : `${avgMs}ms`,
       delta: avgMs == null ? "No data yet" : "UP checks only",
       icon: Clock,
+      miniDonut: null,
     },
   ];
 
@@ -97,28 +228,12 @@ export default async function OverviewPage() {
         }
       />
 
-      {/* Ops banner */}
-      <div
-        className={`mb-6 rounded-xl border p-4 flex items-center gap-3 animate-fade-up ${
-          allOk
-            ? "border-[var(--op-up)]/25 bg-[var(--up-soft)]"
-            : "border-[var(--op-down)]/25 bg-[var(--down-soft)]"
-        }`}
-      >
-        <StatusDot variant={allOk ? "up" : "down"} />
-        <div className="flex-1">
-          <div className="text-sm font-medium text-[var(--text)]">
-            {allOk
-              ? "All systems operational"
-              : `${activeIncidentCount} active incident${activeIncidentCount === 1 ? "" : "s"}`}
-          </div>
-          <div className="text-xs text-[var(--text-muted)]">
-            {allOk
-              ? "No active incidents across your monitors."
-              : "Check the incidents page for details."}
-          </div>
-        </div>
-        <Badge variant={allOk ? "up" : "down"}>{allOk ? "Live" : "Alert"}</Badge>
+      {/* System Health Hero */}
+      <div className="mb-6">
+        <SystemHealthDonut
+          uptimePct={uptime.uptimePct}
+          activeIncidents={activeIncidentCount}
+        />
       </div>
 
       {/* Stat cards */}
@@ -138,8 +253,16 @@ export default async function OverviewPage() {
                   </div>
                   <Icon className="w-4 h-4 text-[var(--text-subtle)]" />
                 </div>
-                <div className="font-mono text-2xl font-semibold text-[var(--text)]">
-                  {s.value}
+                <div className="flex items-center gap-3">
+                  <div className="font-mono text-2xl font-semibold text-[var(--text)]">
+                    {s.value}
+                  </div>
+                  {s.miniDonut && (
+                    <MiniDonut
+                      value={s.miniDonut.value}
+                      color={s.miniDonut.color}
+                    />
+                  )}
                 </div>
                 <div className="text-xs text-[var(--text-muted)] mt-1">{s.delta}</div>
               </CardBody>
@@ -147,6 +270,13 @@ export default async function OverviewPage() {
           );
         })}
       </div>
+
+      {/* Regional Health */}
+      {regionalData.length > 0 && (
+        <div className="mb-6">
+          <RegionalHealth regions={regionalData} />
+        </div>
+      )}
 
       {/* Latency chart */}
       <Card className="mb-6 animate-fade-up" style={{ animationDelay: "240ms" } as React.CSSProperties}>

@@ -12,7 +12,7 @@ import { type MonitorRowData } from "@/components/monitor-row";
 import { MonitorsTable } from "@/components/monitors-table";
 import { RunAllButton } from "@/components/run-all-button";
 import { DeleteAllButton } from "@/components/delete-all-button";
-import { recentChecksForSparkline } from "@/lib/stats";
+import { recentChecksForSparklines } from "@/lib/stats";
 import { bulkUpdateInterval } from "./actions";
 
 type LatestCheckRow = {
@@ -73,12 +73,10 @@ export default async function MonitorsPage() {
     latestChecks.map((c) => [c.monitorId, c])
   );
 
-  const sparklines = await Promise.all(
-    monitors.map((m) => recentChecksForSparkline(m.id, 30))
-  );
+    const sparklinesMap = await recentChecksForSparklines(monitorIds, 30);
 
-  const rows: MonitorRowData[] = monitors.map((m, i) => {
-    const latest = latestByMonitor.get(m.id);
+const rows: MonitorRowData[] = monitors.map((m) => {
+      const latest = latestByMonitor.get(m.id);
     return {
       id: m.id,
       name: m.name,
@@ -98,8 +96,7 @@ export default async function MonitorsPage() {
             error: latest.error,
           }
         : null,
-      sparkline: sparklines[i],
-    };
+          sparkline: sparklinesMap.get(m.id) ?? [],    };
   });
 
   return (

@@ -189,3 +189,50 @@ export async function dailyUptimeForMonitor(
 
   return result;
 }
+
+/**
+ * Sparkline data for multiple monitors in a single query.
+ * Replaces calling recentChecksForSparkline() per monitor in a Promise.all.
+ */
+export async function recentChecksForSparklines(
+  monitorIds: string[],
+  take = 30
+): Promise<Map<string, { t: number; v: number | null }[]>> {
+  if (monitorIds.length === 0) return new Map();
+
+  // Fetch last `take` checks per monitor using DISTINCT ON + subquery
+  const rows = await prisma.$queryRaw<
+    { monitorId: string; checkedAt: Date; responseTimeMs: number | null; status: string }[]
+  >`
+    SELECT "monitorId", "checkedAt", "responseTimeMs", "status"::text as status
+    FROM (
+      SELECT *,
+        ROW_NUMBER() OVER (
+          PARTITION BY "monitorId"
+          ORDER BY "checkedAt" DESC
+        ) as rn
+      FROM "Check"
+      WHERE "monitorId" = ANY(${monitorIds}::text[])
+    ) sub
+    WHERE rn <= ${take}
+    ORDER BY "monitorId", "checkedAt" ASC
+  `;
+
+  const result = new Map<string, { t: number; v: number | null }[]>();
+
+  for (const monitorId of monitorIds) {
+    result.set(monitorId, []);
+  }
+
+  for (const row of rows) {
+    const entry = result.get(row.monitorId);
+    if (entry) {
+      entry.push({
+        t: row.checkedAt.getTime(),
+        v: row.status === "UP" ? row.responseTimeMs : null,
+      });
+    }
+  }
+
+  return result;
+}
