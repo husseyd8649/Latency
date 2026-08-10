@@ -107,7 +107,7 @@ model Check {
   error          String?
   monitor        Monitor     @relation(fields: [monitorId], references: [id], onDelete: Cascade)
 
-  @@index([monitorId, checkedAt])
+  @@index([monitorId, checkedAt(sort: Desc)])
 }
 
 model Incident {
