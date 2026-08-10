@@ -1,4 +1,3 @@
-// app/dashboard/incidents/page.tsx
 import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import {
@@ -9,6 +8,7 @@ import {
 } from "@/components/ui/primitives";
 import { AlertTriangle, CheckCircle2, Globe, Network, ShieldCheck } from "lucide-react";
 import { ReconcileIncidentsButton } from "@/components/reconcile-incidents-button";
+import { RegionFilterBar } from "@/components/region-filter-bar";
 
 const typeIconMap = {
   HTTP: Globe,
@@ -16,30 +16,101 @@ const typeIconMap = {
   SSL: ShieldCheck,
 } as const;
 
-export default async function IncidentsPage() {
+export default async function IncidentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ region?: string }>;
+}) {
   const user = await requireUser();
+  const params = await searchParams;
+  const regionParam = params.region?.trim() || null;
 
-  const incidents = await prisma.incident.findMany({
-    where: { monitor: { userId: user.id } },
-    orderBy: [{ resolvedAt: { sort: "asc", nulls: "first" } }, { startedAt: "desc" }],
-    take: 100,
-    include: {
-      monitor: {
-        select: { id: true, name: true, type: true, target: true },
-      },
-    },
+  // Fetch regions for filter resolution
+  const regions = await prisma.region.findMany({
+    where: { userId: user.id },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, slug: true, color: true },
   });
+
+  // Resolve region filter
+  let activeFilter: {
+    regionId: string | null;
+    isUngrouped: boolean;
+    name: string;
+    color: string;
+  } | null = null;
+
+  if (regionParam === "ungrouped") {
+    activeFilter = {
+      regionId: null,
+      isUngrouped: true,
+      name: "Ungrouped",
+      color: "var(--text-subtle)",
+    };
+  } else if (regionParam) {
+    const matched = regions.find(
+      (r) => r.slug.toLowerCase() === regionParam.toLowerCase()
+    );
+    if (matched) {
+      activeFilter = {
+        regionId: matched.id,
+        isUngrouped: false,
+        name: matched.name,
+        color: matched.color,
+      };
+    }
+  }
+
+  // Build the monitor filter for the incident query
+  const monitorFilter: {
+    userId: string;
+    regionId?: string | null;
+  } = { userId: user.id };
+
+  if (activeFilter) {
+    monitorFilter.regionId = activeFilter.isUngrouped
+      ? null
+      : activeFilter.regionId;
+  }
+
+  // Fetch filtered incidents AND total incident count in parallel
+  const [incidents, totalCount] = await Promise.all([
+    prisma.incident.findMany({
+      where: { monitor: monitorFilter },
+      orderBy: [
+        { resolvedAt: { sort: "asc", nulls: "first" } },
+        { startedAt: "desc" },
+      ],
+      take: 100,
+      include: {
+        monitor: {
+          select: { id: true, name: true, type: true, target: true },
+        },
+      },
+    }),
+    prisma.incident.count({
+      where: { monitor: { userId: user.id } },
+    }),
+  ]);
 
   const active = incidents.filter((i) => !i.resolvedAt);
   const resolved = incidents.filter((i) => i.resolvedAt);
 
   return (
     <>
-            <PageHeader
+      <PageHeader
         title="Incidents"
         description="Downtime timeline across your monitors."
         actions={<ReconcileIncidentsButton />}
       />
+
+      {activeFilter && (
+        <RegionFilterBar
+          region={{ name: activeFilter.name, color: activeFilter.color }}
+          matchedCount={incidents.length}
+          totalCount={totalCount}
+        />
+      )}
 
       {incidents.length === 0 ? (
         <Card className="animate-fade-up">
@@ -48,10 +119,14 @@ export default async function IncidentsPage() {
               <CheckCircle2 className="w-5 h-5 text-[var(--op-up)]" />
             </div>
             <div className="text-sm font-medium text-[var(--text)]">
-              No incidents recorded
+              {activeFilter
+                ? `No incidents in ${activeFilter.name}`
+                : "No incidents recorded"}
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-1">
-              When a monitor goes down, it will appear here.
+              {activeFilter
+                ? "This region has no incidents recorded."
+                : "When a monitor goes down, it will appear here."}
             </div>
           </CardBody>
         </Card>
