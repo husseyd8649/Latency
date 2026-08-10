@@ -10,10 +10,14 @@ export function RegionFilterBar({
   region,
   matchedCount,
   totalCount,
+  itemLabel = "monitor",
+  clearHref = "/dashboard/monitors",
 }: {
   region: RegionInfo;
   matchedCount: number;
   totalCount: number;
+  itemLabel?: string;
+  clearHref?: string;
 }) {
   return (
     <div className="mb-4 flex items-center justify-between rounded-lg border border-[var(--accent)]/25 bg-[var(--accent-soft)] px-4 py-2.5 animate-fade-up">
@@ -28,11 +32,11 @@ export function RegionFilterBar({
           {region.name}
         </span>
         <span className="text-xs text-[var(--text-subtle)]">
-          · {matchedCount} of {totalCount} monitor{totalCount !== 1 && "s"}
+          · {matchedCount} of {totalCount} {itemLabel}{totalCount !== 1 && "s"}
         </span>
       </div>
       <Link
-        href="/dashboard/monitors"
+        href={clearHref}
         className="inline-flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
       >
         <X className="w-3.5 h-3.5" />

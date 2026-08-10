@@ -104,11 +104,13 @@ export default async function IncidentsPage({
         actions={<ReconcileIncidentsButton />}
       />
 
-      {activeFilter && (
+            {activeFilter && (
         <RegionFilterBar
           region={{ name: activeFilter.name, color: activeFilter.color }}
           matchedCount={incidents.length}
           totalCount={totalCount}
+          itemLabel="incident"
+          clearHref="/dashboard/incidents"
         />
       )}
 
