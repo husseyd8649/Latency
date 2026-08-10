@@ -1,4 +1,3 @@
-// lib/checkers/runner.ts
 import { prisma } from "@/lib/prisma";
 import type { Monitor } from "@prisma/client";
 import { checkHttp } from "./http";
@@ -48,18 +47,13 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
     resolved: ResolvedIncident | null;
   } = { opened: null, resolved: null };
 
-  // Everything in one transaction to reuse a single connection.
-  // Generous timeouts to survive occasional slow round-trips under load.
   await prisma.$transaction(
     async (tx) => {
-      // 1. Read previous status
-      const previous = await tx.check.findFirst({
-        where: { monitorId: monitor.id },
-        orderBy: { checkedAt: "desc" },
-        select: { status: true },
-      });
+      // 1. Read previous status FROM MONITOR (denormalized, fast)
+      // Falls back to Check table only if lastStatus is null (first check ever)
+      const previousStatus = monitor.lastStatus ?? null;
 
-      // 2. Insert new check
+      // 2. Insert new check row (for historical data + sparklines)
       await tx.check.create({
         data: {
           monitorId: monitor.id,
@@ -71,14 +65,20 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
         },
       });
 
-      // 3. Update monitor schedule
+      // 3. Update monitor with schedule AND denormalized latest check data
       await tx.monitor.update({
         where: { id: monitor.id },
-        data: { lastCheckedAt: now, nextCheckAt },
+        data: {
+          lastCheckedAt: now,
+          nextCheckAt,
+          lastStatus: result.status,
+          lastResponseTimeMs: result.responseTimeMs,
+          lastError: result.error,
+        },
       });
 
       // 4. Incident state machine
-      const wasUp = previous?.status === "UP" || previous == null;
+      const wasUp = previousStatus === "UP" || previousStatus == null;
       const isUp = result.status === "UP";
 
       if (wasUp && !isUp) {
@@ -117,8 +117,8 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
       }
     },
     {
-      timeout: 20000, // 20s ceiling per transaction
-      maxWait: 15000, // 15s to acquire a connection
+      timeout: 20000,
+      maxWait: 15000,
     }
   );
 

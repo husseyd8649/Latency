@@ -71,6 +71,9 @@ model Monitor {
   nextCheckAt     DateTime?
   createdAt       DateTime    @default(now())
   regionId    String?
+  lastStatus         CheckStatus?
+  lastResponseTimeMs Int?
+  lastError          String?
   region      Region?  @relation(fields: [regionId], references: [id])
   checks          Check[]
   incidents       Incident[]

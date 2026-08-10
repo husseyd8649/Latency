@@ -24,17 +24,19 @@ import { SystemHealthDonut } from "@/components/system-health-donut";
 import { MiniDonut } from "@/components/mini-donut";
 import { RegionalHealth } from "@/components/regional-health";
 
-type LatestCheckRow = {
-  monitorId: string;
-  status: string;
-};
-
 export default async function OverviewPage() {
   const user = await requireUser();
 
+  // Now includes lastStatus so we don't need a separate DISTINCT ON query
   const monitors = await prisma.monitor.findMany({
     where: { userId: user.id },
-    select: { id: true, name: true, isPaused: true, regionId: true },
+    select: {
+      id: true,
+      name: true,
+      isPaused: true,
+      regionId: true,
+      lastStatus: true,
+    },
   });
   const monitorIds = monitors.map((m) => m.id);
 
@@ -45,7 +47,6 @@ export default async function OverviewPage() {
     hourly,
     recentIncidents,
     regions,
-    latestChecks,
     incidentCounts,
   ] = await Promise.all([
     prisma.incident.count({
@@ -66,16 +67,6 @@ export default async function OverviewPage() {
       select: { id: true, name: true, slug: true, color: true },
     }),
     monitorIds.length > 0
-      ? prisma.$queryRaw<LatestCheckRow[]>`
-          SELECT DISTINCT ON ("monitorId")
-            "monitorId",
-            "status"::text as status
-          FROM "Check"
-          WHERE "monitorId" = ANY(${monitorIds}::text[])
-          ORDER BY "monitorId", "checkedAt" DESC
-        `
-      : ([] as LatestCheckRow[]),
-    monitorIds.length > 0
       ? prisma.incident.groupBy({
           by: ["monitorId"],
           where: {
@@ -86,10 +77,6 @@ export default async function OverviewPage() {
         })
       : [],
   ]);
-
-  const statusByMonitor = new Map(
-    latestChecks.map((c) => [c.monitorId, c.status])
-  );
 
   const incidentsByMonitor = new Map(
     incidentCounts.map((ic) => [ic.monitorId, ic._count._all])
@@ -110,7 +97,6 @@ export default async function OverviewPage() {
 
   const regionMap = new Map<string, RegionBucket>();
 
-  // Init buckets for each user region
   for (const r of regions) {
     regionMap.set(r.id, {
       id: r.id,
@@ -125,7 +111,6 @@ export default async function OverviewPage() {
     });
   }
 
-  // Init ungrouped bucket
   const ungroupedKey = "__ungrouped__";
   regionMap.set(ungroupedKey, {
     id: null,
@@ -139,7 +124,6 @@ export default async function OverviewPage() {
     activeIncidents: 0,
   });
 
-  // Populate buckets
   for (const m of monitors) {
     const bucketKey = m.regionId ?? ungroupedKey;
     const bucket = regionMap.get(bucketKey);
@@ -150,20 +134,18 @@ export default async function OverviewPage() {
     if (m.isPaused) {
       bucket.paused += 1;
     } else {
-      const status = statusByMonitor.get(m.id);
-      if (status === "UP") bucket.up += 1;
-      else if (status === "DOWN") bucket.down += 1;
+      // Read directly from denormalized lastStatus - no DISTINCT ON needed!
+      if (m.lastStatus === "UP") bucket.up += 1;
+      else if (m.lastStatus === "DOWN") bucket.down += 1;
     }
 
     bucket.activeIncidents += incidentsByMonitor.get(m.id) ?? 0;
   }
 
-  // Convert to array, filter out empty ungrouped
   const regionalData = Array.from(regionMap.values()).filter(
     (r) => r.id !== null || r.total > 0
   );
 
-  // -- Stat cards --
   const uptimeColor =
     uptime.uptimePct == null
       ? "var(--text-subtle)"
@@ -228,7 +210,6 @@ export default async function OverviewPage() {
         }
       />
 
-      {/* System Health Hero */}
       <div className="mb-6">
         <SystemHealthDonut
           uptimePct={uptime.uptimePct}
@@ -236,7 +217,6 @@ export default async function OverviewPage() {
         />
       </div>
 
-      {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {stats.map((s, i) => {
           const Icon = s.icon;
@@ -271,14 +251,12 @@ export default async function OverviewPage() {
         })}
       </div>
 
-      {/* Regional Health */}
       {regionalData.length > 0 && (
         <div className="mb-6">
           <RegionalHealth regions={regionalData} />
         </div>
       )}
 
-      {/* Latency chart */}
       <Card className="mb-6 animate-fade-up" style={{ animationDelay: "240ms" } as React.CSSProperties}>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -298,7 +276,6 @@ export default async function OverviewPage() {
         </CardBody>
       </Card>
 
-      {/* Recent incidents */}
       <Card className="animate-fade-up" style={{ animationDelay: "300ms" } as React.CSSProperties}>
         <CardHeader>
           <div className="flex items-center justify-between">

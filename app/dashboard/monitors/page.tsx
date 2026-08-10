@@ -12,23 +12,69 @@ import { type MonitorRowData } from "@/components/monitor-row";
 import { MonitorsTable } from "@/components/monitors-table";
 import { RunAllButton } from "@/components/run-all-button";
 import { DeleteAllButton } from "@/components/delete-all-button";
+import { RegionFilterBar } from "@/components/region-filter-bar";
 import { recentChecksForSparklines } from "@/lib/stats";
 import { bulkUpdateInterval } from "./actions";
 
-type LatestCheckRow = {
-  monitorId: string;
-  status: "UP" | "DOWN";
-  responseTimeMs: number | null;
-  checkedAt: Date;
-  error: string | null;
-};
-
-export default async function MonitorsPage() {
+export default async function MonitorsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ region?: string }>;
+}) {
   const user = await requireUser();
+  const params = await searchParams;
+  const regionParam = params.region?.trim() || null;
 
-  const [monitors, regions] = await Promise.all([
+  // Fetch all regions first — needed for both filter resolution and dropdown
+  const regions = await prisma.region.findMany({
+    where: { userId: user.id },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, slug: true, color: true },
+  });
+
+  // Resolve region filter
+  let activeFilter: {
+    regionId: string | null;
+    isUngrouped: boolean;
+    name: string;
+    color: string;
+  } | null = null;
+
+  if (regionParam === "ungrouped") {
+    activeFilter = {
+      regionId: null,
+      isUngrouped: true,
+      name: "Ungrouped",
+      color: "var(--text-subtle)",
+    };
+  } else if (regionParam) {
+    const matched = regions.find(
+      (r) => r.slug.toLowerCase() === regionParam.toLowerCase()
+    );
+    if (matched) {
+      activeFilter = {
+        regionId: matched.id,
+        isUngrouped: false,
+        name: matched.name,
+        color: matched.color,
+      };
+    }
+  }
+
+  const monitorWhere: {
+    userId: string;
+    regionId?: string | null;
+  } = { userId: user.id };
+
+  if (activeFilter) {
+    monitorWhere.regionId = activeFilter.isUngrouped ? null : activeFilter.regionId;
+  }
+
+  // Now fetches lastStatus, lastResponseTimeMs, lastError, lastCheckedAt directly
+  // No more DISTINCT ON query needed!
+  const [monitors, totalCount] = await Promise.all([
     prisma.monitor.findMany({
-      where: { userId: user.id },
+      where: monitorWhere,
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -41,42 +87,22 @@ export default async function MonitorsPage() {
         isPaused: true,
         createdAt: true,
         regionId: true,
+        lastStatus: true,
+        lastResponseTimeMs: true,
+        lastError: true,
+        lastCheckedAt: true,
       },
     }),
-    prisma.region.findMany({
-      where: { userId: user.id },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, color: true },
-    }),
+    prisma.monitor.count({ where: { userId: user.id } }),
   ]);
 
   const activeCount = monitors.filter((m) => !m.isPaused).length;
-  const totalCount = monitors.length;
+  const filteredCount = monitors.length;
   const monitorIds = monitors.map((m) => m.id);
 
-  const latestChecks =
-    monitorIds.length > 0
-      ? await prisma.$queryRaw<LatestCheckRow[]>`
-          SELECT DISTINCT ON ("monitorId")
-            "monitorId",
-            "status"::text as status,
-            "responseTimeMs",
-            "checkedAt",
-            "error"
-          FROM "Check"
-          WHERE "monitorId" = ANY(${monitorIds}::text[])
-          ORDER BY "monitorId", "checkedAt" DESC
-        `
-      : [];
+  const sparklinesMap = await recentChecksForSparklines(monitorIds, 30);
 
-  const latestByMonitor = new Map(
-    latestChecks.map((c) => [c.monitorId, c])
-  );
-
-    const sparklinesMap = await recentChecksForSparklines(monitorIds, 30);
-
-const rows: MonitorRowData[] = monitors.map((m) => {
-      const latest = latestByMonitor.get(m.id);
+  const rows: MonitorRowData[] = monitors.map((m) => {
     return {
       id: m.id,
       name: m.name,
@@ -88,16 +114,23 @@ const rows: MonitorRowData[] = monitors.map((m) => {
       isPaused: m.isPaused,
       createdAt: m.createdAt.toISOString(),
       regionId: m.regionId,
-      last: latest
+      last: m.lastStatus
         ? {
-            status: latest.status,
-            responseTimeMs: latest.responseTimeMs,
-            checkedAt: latest.checkedAt.toISOString(),
-            error: latest.error,
+            status: m.lastStatus,
+            responseTimeMs: m.lastResponseTimeMs,
+            checkedAt: (m.lastCheckedAt ?? m.createdAt).toISOString(),
+            error: m.lastError,
           }
         : null,
-          sparkline: sparklinesMap.get(m.id) ?? [],    };
+      sparkline: sparklinesMap.get(m.id) ?? [],
+    };
   });
+
+  const regionListForTable = regions.map((r) => ({
+    id: r.id,
+    name: r.name,
+    color: r.color,
+  }));
 
   return (
     <>
@@ -119,6 +152,14 @@ const rows: MonitorRowData[] = monitors.map((m) => {
         }
       />
 
+      {activeFilter && (
+        <RegionFilterBar
+          region={{ name: activeFilter.name, color: activeFilter.color }}
+          matchedCount={filteredCount}
+          totalCount={totalCount}
+        />
+      )}
+
       {rows.length === 0 ? (
         <Card className="animate-fade-up">
           <CardBody className="text-center py-16">
@@ -126,22 +167,34 @@ const rows: MonitorRowData[] = monitors.map((m) => {
               <Globe className="w-5 h-5 text-[var(--text-subtle)]" />
             </div>
             <div className="text-sm font-medium text-[var(--text)]">
-              No monitors yet
+              {activeFilter
+                ? `No monitors in ${activeFilter.name}`
+                : "No monitors yet"}
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-1 mb-5">
-              Add your first HTTP, TCP or SSL check to start monitoring.
+              {activeFilter
+                ? "Try clearing the filter or assign monitors to this region."
+                : "Add your first HTTP, TCP or SSL check to start monitoring."}
             </div>
-            <Link href="/dashboard/add">
-              <Button size="sm">
-                <PlusCircle className="w-3.5 h-3.5" />
-                Add monitor
-              </Button>
-            </Link>
+            {activeFilter ? (
+              <Link href="/dashboard/monitors">
+                <Button size="sm" variant="secondary">
+                  Clear filter
+                </Button>
+              </Link>
+            ) : (
+              <Link href="/dashboard/add">
+                <Button size="sm">
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  Add monitor
+                </Button>
+              </Link>
+            )}
           </CardBody>
         </Card>
       ) : (
         <Card className="animate-fade-up overflow-hidden">
-          <MonitorsTable rows={rows} regions={regions} />
+          <MonitorsTable rows={rows} regions={regionListForTable} />
         </Card>
       )}
     </>
