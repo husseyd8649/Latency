@@ -2,278 +2,289 @@
 
 import { useState, useEffect } from "react";
 
-type Tier = "GOOD" | "DEGRADED" | "CRITICAL";
+// SVG geometry
+const CX = 250;
+const CY = 240;
+const R_OUTER = 195;
+const R_INNER = 158;
+const ARC_STROKE_OUTER = 16;
+const ARC_STROKE_INNER = 3;
+const START_ANGLE = 180;
+const END_ANGLE = 360;
+const TOTAL_ANGLE = END_ANGLE - START_ANGLE;
 
-const tierConfig: Record<Tier, {
-  label: string;
-  color: string;
-  glowColor: string;
-  gradientFrom: string;
-  gradientTo: string;
-}> = {
-  GOOD: {
-    label: "EXCELLENT",
-    color: "var(--op-up)",
-    glowColor: "var(--op-up)",
-    gradientFrom: "#10B981",
-    gradientTo: "#34D399",
-  },
-  DEGRADED: {
-    label: "DEGRADED",
-    color: "var(--op-degraded)",
-    glowColor: "var(--op-degraded)",
-    gradientFrom: "#F59E0B",
-    gradientTo: "#FBBF24",
-  },
-  CRITICAL: {
-    label: "CRITICAL",
-    color: "var(--op-down)",
-    glowColor: "var(--op-down)",
-    gradientFrom: "#DC2626",
-    gradientTo: "#FB7185",
-  },
-};
+const MAJOR_TICKS = [0, 25, 50, 75, 100];
+const MINOR_TICK_COUNT = 40;
+
+// Teal-to-blue gradient palette (Corporate-friendly)
+const GRADIENT_START = "#2DD4BF"; // teal-400
+const GRADIENT_END = "#2563EB";   // blue-600 (matches Corporate accent)
+const GLOW_COLOR = "#3B82F6";
+
+function tierLabel(uptimePct: number | null): string {
+  if (uptimePct == null) return "PENDING";
+  if (uptimePct >= 99) return "EXCELLENT";
+  if (uptimePct >= 95) return "GOOD";
+  if (uptimePct >= 90) return "FAIR";
+  return "POOR";
+}
+
+function tierColor(uptimePct: number | null): string {
+  if (uptimePct == null) return "var(--text-muted)";
+  if (uptimePct >= 99) return "#10B981";
+  if (uptimePct >= 95) return "#059669";
+  if (uptimePct >= 90) return "#F59E0B";
+  return "#DC2626";
+}
 
 export function SystemHealthGauge({
   uptimePct,
   activeIncidents,
-  totalMonitors,
   avgLatencyMs,
 }: {
   uptimePct: number | null;
   activeIncidents: number;
-  totalMonitors: number;
   avgLatencyMs: number | null;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const tier = deriveTier(uptimePct, activeIncidents);
-  const config = tierConfig[tier];
   const value = uptimePct ?? 100;
-
-  // Semi-circular arc math
-  // Total arc: 180 degrees (semicircle), from -90° (left) to 90° (right)
-  // Value 0 = -90°, value 100 = 90°
-  const angle = -90 + (value / 100) * 180;
+  const valueAngle = START_ANGLE + (value / 100) * TOTAL_ANGLE;
+  const label = tierLabel(uptimePct);
+  const labelColor = tierColor(uptimePct);
+  // Display "97/100" style like the reference
+  const displayValue = uptimePct != null ? Math.round(value) : 0;
 
   return (
-    <div className="relative rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-md)] p-8 animate-fade-up overflow-hidden">
-      {/* Subtle background glow behind gauge */}
+    <div className="relative rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-md)] p-6 animate-fade-up overflow-hidden">
+      {/* Soft ambient glow */}
       {mounted && (
         <div
-          className="absolute inset-0 opacity-20 pointer-events-none"
+          className="absolute inset-0 opacity-[0.06] pointer-events-none"
           style={{
-            background: `radial-gradient(ellipse at center top, ${config.glowColor}, transparent 60%)`,
+            background: `radial-gradient(ellipse 60% 55% at 50% 45%, ${GLOW_COLOR}, transparent 70%)`,
           }}
         />
       )}
 
-      <div className="relative flex items-center gap-8 flex-wrap">
-        {/* Left: Gauge */}
-        <div className="flex-1 min-w-[320px] flex flex-col items-center">
-          <div className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-2">
-            System Health
-          </div>
+      <div className="relative flex flex-col items-center">
+        <div className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-1">
+          Site Health
+        </div>
 
-          {/* SVG Gauge */}
-          <div className="relative w-full max-w-[400px] aspect-[2/1]">
-            <svg viewBox="0 0 400 220" className="w-full h-full">
+        <div className="w-full max-w-[500px]" style={{ minHeight: "310px" }}>
+          {mounted && (
+            <svg viewBox="0 0 500 310" className="w-full h-auto">
               <defs>
-                <linearGradient id="gauge-gradient" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor={config.gradientFrom} />
-                  <stop offset="100%" stopColor={config.gradientTo} />
+                <linearGradient id="health-arc-gradient" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor={GRADIENT_START} />
+                  <stop offset="100%" stopColor={GRADIENT_END} />
                 </linearGradient>
-                <filter id="gauge-glow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur stdDeviation="4" result="blur" />
+
+                <filter id="health-arc-glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="5" result="blur" />
                   <feMerge>
                     <feMergeNode in="blur" />
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
+
+                <filter id="health-needle-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.25" />
+                </filter>
+
+                <radialGradient id="health-hub-gradient" cx="50%" cy="30%" r="70%">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+                  <stop offset="100%" stopColor={GRADIENT_END} />
+                </radialGradient>
               </defs>
 
-              {/* Background arc (unfilled portion) */}
+              {/* Background track */}
               <path
-                d="M 40 200 A 160 160 0 0 1 360 200"
+                d={arcPath(CX, CY, R_OUTER, START_ANGLE, END_ANGLE)}
                 fill="none"
                 stroke="var(--surface-2)"
-                strokeWidth="24"
+                strokeWidth={ARC_STROKE_OUTER}
                 strokeLinecap="round"
               />
 
-              {/* Filled arc up to current value */}
-              {mounted && (
-                <path
-                  d={describeArc(200, 200, 160, -90, angle)}
-                  fill="none"
-                  stroke="url(#gauge-gradient)"
-                  strokeWidth="24"
-                  strokeLinecap="round"
-                  filter="url(#gauge-glow)"
-                  style={{
-                    transition: "all 800ms cubic-bezier(0.4, 0, 0.2, 1)",
-                  }}
-                />
-              )}
+              {/* Filled arc up to current value — gradient */}
+              <path
+                d={arcPath(CX, CY, R_OUTER, START_ANGLE, valueAngle)}
+                fill="none"
+                stroke="url(#health-arc-gradient)"
+                strokeWidth={ARC_STROKE_OUTER}
+                strokeLinecap="round"
+                filter="url(#health-arc-glow)"
+              />
 
-              {/* Tick marks around arc */}
-              {[0, 25, 50, 75, 100].map((tick) => {
-                const tickAngle = -90 + (tick / 100) * 180;
-                const rad = (tickAngle * Math.PI) / 180;
-                const x1 = 200 + Math.cos(rad) * 180;
-                const y1 = 200 + Math.sin(rad) * 180;
-                const x2 = 200 + Math.cos(rad) * 190;
-                const y2 = 200 + Math.sin(rad) * 190;
-                const labelX = 200 + Math.cos(rad) * 205;
-                const labelY = 200 + Math.sin(rad) * 205;
+              {/* Inner reference arc */}
+              <path
+                d={arcPath(CX, CY, R_INNER, START_ANGLE, END_ANGLE)}
+                fill="none"
+                stroke="var(--border)"
+                strokeWidth={ARC_STROKE_INNER}
+                strokeLinecap="round"
+              />
+
+              {/* Tick marks */}
+              {Array.from({ length: MINOR_TICK_COUNT + 1 }).map((_, i) => {
+                const isMajor = i % 10 === 0;
+                const tickAngle = START_ANGLE + (i / MINOR_TICK_COUNT) * TOTAL_ANGLE;
+                const inner = polarToCartesian(CX, CY, R_INNER - (isMajor ? 12 : 6), tickAngle);
+                const outer = polarToCartesian(CX, CY, R_INNER - 2, tickAngle);
                 return (
-                  <g key={tick}>
-                    <line
-                      x1={x1}
-                      y1={y1}
-                      x2={x2}
-                      y2={y2}
-                      stroke="var(--text-subtle)"
-                      strokeWidth="1.5"
-                    />
-                    <text
-                      x={labelX}
-                      y={labelY}
-                      fontSize="10"
-                      fill="var(--text-subtle)"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontFamily="var(--font-mono)"
-                    >
-                      {tick}
-                    </text>
-                  </g>
+                  <line
+                    key={`tick-${i}`}
+                    x1={inner.x}
+                    y1={inner.y}
+                    x2={outer.x}
+                    y2={outer.y}
+                    stroke={isMajor ? "var(--text-muted)" : "var(--text-subtle)"}
+                    strokeWidth={isMajor ? 2 : 1}
+                    strokeLinecap="round"
+                  />
                 );
               })}
 
-              {/* Needle */}
-              {mounted && (
-                <g
-                  style={{
-                    transformOrigin: "200px 200px",
-                    transform: `rotate(${angle + 90}deg)`,
-                    transition: "transform 800ms cubic-bezier(0.4, 0, 0.2, 1)",
-                  }}
-                >
-                  <line
-                    x1="200"
-                    y1="200"
-                    x2="200"
-                    y2="60"
-                    stroke={config.color}
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    filter="url(#gauge-glow)"
-                  />
-                  <circle cx="200" cy="200" r="10" fill={config.color} />
-                  <circle cx="200" cy="200" r="5" fill="var(--surface)" />
-                </g>
-              )}
-            </svg>
+              {/* Major tick labels */}
+              {MAJOR_TICKS.map((tick) => {
+                const tickAngle = START_ANGLE + (tick / 100) * TOTAL_ANGLE;
+                const label = polarToCartesian(CX, CY, R_INNER - 28, tickAngle);
+                return (
+                  <text
+                    key={`label-${tick}`}
+                    x={label.x}
+                    y={label.y}
+                    fontSize="12"
+                    fontWeight="600"
+                    fill="var(--text-muted)"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    style={{ fontFamily: "var(--font-mono)" }}
+                  >
+                    {tick}
+                  </text>
+                );
+              })}
 
-            {/* Centered value text (positioned absolutely over SVG) */}
-            <div className="absolute inset-x-0 top-[45%] flex flex-col items-center pointer-events-none">
-              <div className="font-mono text-5xl font-bold text-[var(--text)] leading-none">
-                {uptimePct != null ? `${value.toFixed(1)}%` : "—"}
-              </div>
-              <div
-                className="text-xs font-bold tracking-widest mt-1.5"
-                style={{ color: config.color }}
+              {/* Center text — positioned above needle */}
+              <text
+                x={CX}
+                y={CY - 90}
+                fontSize="12"
+                fontWeight="700"
+                fill="var(--text-muted)"
+                textAnchor="middle"
+                letterSpacing="2"
               >
-                {config.label}
-              </div>
-            </div>
-          </div>
+                SITE HEALTH
+              </text>
+              <text
+                x={CX}
+                y={CY - 50}
+                fontSize="38"
+                fontWeight="800"
+                fill="var(--text)"
+                textAnchor="middle"
+                style={{ fontFamily: "var(--font-mono)" }}
+              >
+                {displayValue}
+                <tspan fontSize="18" fill="var(--text-muted)" fontWeight="600">
+                  /100
+                </tspan>
+              </text>
+              <text
+                x={CX}
+                y={CY - 25}
+                fontSize="13"
+                fontWeight="700"
+                fill={labelColor}
+                textAnchor="middle"
+                letterSpacing="2"
+              >
+                {label}
+              </text>
+
+              {/* Needle */}
+              <g transform={`rotate(${round(valueAngle - 270)} ${CX} ${CY})`}>
+                <polygon
+                  points={`
+                    ${CX - 5},${CY}
+                    ${CX + 5},${CY}
+                    ${CX + 1.5},${CY - R_INNER + 8}
+                    ${CX - 1.5},${CY - R_INNER + 8}
+                  `}
+                  fill={GRADIENT_END}
+                  filter="url(#health-needle-shadow)"
+                />
+                <circle
+                  cx={CX}
+                  cy={CY - R_INNER + 8}
+                  r={4}
+                  fill={GRADIENT_END}
+                />
+              </g>
+
+              {/* Center hub */}
+              <circle
+                cx={CX}
+                cy={CY}
+                r={22}
+                fill="var(--surface)"
+                stroke="var(--border)"
+                strokeWidth={2}
+                filter="url(#health-needle-shadow)"
+              />
+              <circle cx={CX} cy={CY} r={14} fill="url(#health-hub-gradient)" />
+              <circle cx={CX - 3} cy={CY - 4} r={3} fill="#ffffff" opacity="0.6" />
+            </svg>
+          )}
         </div>
 
-        {/* Right: Stat readouts */}
-        <div className="flex-1 min-w-[240px] space-y-4">
-          <ReadoutRow
-            label="Total Monitors"
-            value={String(totalMonitors)}
-            accent="var(--accent)"
-          />
-          <ReadoutRow
-            label="Active Incidents"
-            value={String(activeIncidents)}
-            accent={activeIncidents > 0 ? "var(--op-down)" : "var(--op-up)"}
-          />
-          <ReadoutRow
-            label="Avg. Latency"
-            value={avgLatencyMs != null ? `${avgLatencyMs}ms` : "—"}
-            accent="var(--accent)"
-          />
-          <ReadoutRow
-            label="Uptime (24h)"
-            value={uptimePct != null ? `${value.toFixed(2)}%` : "—"}
-            accent={config.color}
-          />
+        {/* Two sub-stats below gauge (Uptime + Avg Latency style like reference) */}
+        <div className="w-full mt-2 flex items-center justify-center gap-10">
+          <div className="text-center">
+            <div className="font-mono text-2xl font-bold text-[var(--text)]">
+              {uptimePct != null ? `${value.toFixed(2)}%` : "—"}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">
+              Uptime (24h)
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="font-mono text-2xl font-bold text-[var(--text)]">
+              {avgLatencyMs != null ? `${avgLatencyMs}ms` : "—"}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">
+              Avg. Load
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function ReadoutRow({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent: string;
-}) {
-  return (
-    <div className="flex items-center justify-between border-b border-[var(--border)] pb-2 last:border-0">
-      <span className="text-xs uppercase tracking-wider text-[var(--text-muted)]">
-        {label}
-      </span>
-      <span
-        className="font-mono text-lg font-semibold"
-        style={{ color: accent }}
-      >
-        {value}
-      </span>
-    </div>
-  );
+/* -------------------------------------------------------------------------- */
+
+function round(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
-/**
- * Helper: generate an SVG path for a circular arc.
- * cx, cy: center of circle
- * r: radius
- * startAngle, endAngle: in degrees (0 = right, -90 = top)
- */
-function describeArc(
-  cx: number,
-  cy: number,
-  r: number,
-  startAngle: number,
-  endAngle: number
-): string {
-  const startRad = (startAngle * Math.PI) / 180;
-  const endRad = (endAngle * Math.PI) / 180;
-
-  const x1 = cx + Math.cos(startRad) * r;
-  const y1 = cy + Math.sin(startRad) * r;
-  const x2 = cx + Math.cos(endRad) * r;
-  const y2 = cy + Math.sin(endRad) * r;
-
-  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
-  const sweep = 1;
-
-  return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} ${sweep} ${x2} ${y2}`;
+function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return {
+    x: round(cx + r * Math.cos(rad)),
+    y: round(cy + r * Math.sin(rad)),
+  };
 }
 
-function deriveTier(uptimePct: number | null, activeIncidents: number): Tier {
-  const uptime = uptimePct ?? 100;
-  if (activeIncidents > 5 || uptime < 95) return "CRITICAL";
-  if (activeIncidents >= 1 || uptime < 99) return "DEGRADED";
-  return "GOOD";
+function arcPath(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
+  const start = polarToCartesian(cx, cy, r, startAngle);
+  const end = polarToCartesian(cx, cy, r, endAngle);
+  const angleSpan = endAngle - startAngle;
+  const largeArcFlag = angleSpan > 180 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
 }

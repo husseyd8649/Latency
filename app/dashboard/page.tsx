@@ -3,25 +3,23 @@ import {
   CardBody,
   CardHeader,
   Badge,
-  StatusDot,
   PageHeader,
   Button,
 } from "@/components/ui/primitives";
-import {
-  Activity,
-  ArrowUpRight,
-  Clock,
-  TrendingUp,
-  Zap,
-  AlertTriangle,
-} from "lucide-react";
+import { ArrowUpRight, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { avgLatency, hourlyLatency, uptimeForMonitors } from "@/lib/stats";
+import {
+  avgLatency,
+  hourlyLatency,
+  uptimeForMonitors,
+  topPerformingUrls,
+} from "@/lib/stats";
 import { UptimeChart } from "@/components/uptime-chart";
 import { SystemHealthGauge } from "@/components/system-health-gauge";
-import { MiniGauge } from "@/components/mini-gauge";
+import { DashboardGaugeCard } from "@/components/dashboard-gauge-card";
+import { TopUrlsCard } from "@/components/top-urls-card";
 import { RegionalHealth } from "@/components/regional-health";
 
 export default async function OverviewPage() {
@@ -31,7 +29,6 @@ export default async function OverviewPage() {
     where: { userId: user.id },
     select: {
       id: true,
-      name: true,
       isPaused: true,
       regionId: true,
       lastStatus: true,
@@ -47,6 +44,7 @@ export default async function OverviewPage() {
     recentIncidents,
     regions,
     incidentCounts,
+    topUrls,
   ] = await Promise.all([
     prisma.incident.count({
       where: { resolvedAt: null, monitor: { userId: user.id } },
@@ -75,13 +73,14 @@ export default async function OverviewPage() {
           _count: { _all: true },
         })
       : [],
+    topPerformingUrls(user.id, 5, 24),
   ]);
 
   const incidentsByMonitor = new Map(
     incidentCounts.map((ic) => [ic.monitorId, ic._count._all])
   );
 
-  // -- Build regional health data --
+  // -- Regional health data --
   type RegionBucket = {
     id: string | null;
     name: string;
@@ -95,48 +94,29 @@ export default async function OverviewPage() {
   };
 
   const regionMap = new Map<string, RegionBucket>();
-
   for (const r of regions) {
     regionMap.set(r.id, {
-      id: r.id,
-      name: r.name,
-      slug: r.slug,
-      color: r.color,
-      total: 0,
-      up: 0,
-      down: 0,
-      paused: 0,
-      activeIncidents: 0,
+      id: r.id, name: r.name, slug: r.slug, color: r.color,
+      total: 0, up: 0, down: 0, paused: 0, activeIncidents: 0,
     });
   }
-
   const ungroupedKey = "__ungrouped__";
   regionMap.set(ungroupedKey, {
-    id: null,
-    name: "Ungrouped",
-    slug: "ungrouped",
-    color: "var(--text-subtle)",
-    total: 0,
-    up: 0,
-    down: 0,
-    paused: 0,
-    activeIncidents: 0,
+    id: null, name: "Ungrouped", slug: "ungrouped", color: "var(--text-subtle)",
+    total: 0, up: 0, down: 0, paused: 0, activeIncidents: 0,
   });
 
   for (const m of monitors) {
     const bucketKey = m.regionId ?? ungroupedKey;
     const bucket = regionMap.get(bucketKey);
     if (!bucket) continue;
-
     bucket.total += 1;
-
     if (m.isPaused) {
       bucket.paused += 1;
     } else {
       if (m.lastStatus === "UP") bucket.up += 1;
       else if (m.lastStatus === "DOWN") bucket.down += 1;
     }
-
     bucket.activeIncidents += incidentsByMonitor.get(m.id) ?? 0;
   }
 
@@ -144,54 +124,12 @@ export default async function OverviewPage() {
     (r) => r.id !== null || r.total > 0
   );
 
-  const uptimeColor =
-    uptime.uptimePct == null
-      ? "var(--text-subtle)"
-      : uptime.uptimePct >= 99
-      ? "var(--op-up)"
-      : uptime.uptimePct >= 95
-      ? "var(--op-degraded)"
-      : "var(--op-down)";
+  // -- Latency gauge config --
+  const latencyMax = 2000; // 2s ceiling for the gauge scale
+  const latencyPct = avgMs != null ? Math.min(latencyMax, avgMs) : 0;
 
-  const stats = [
-    {
-      label: "Uptime (24h)",
-      value:
-        uptime.uptimePct == null
-          ? "—"
-          : `${uptime.uptimePct.toFixed(2)}%`,
-      delta:
-        uptime.totalChecks === 0
-          ? "No data yet"
-          : `${uptime.upChecks}/${uptime.totalChecks} checks`,
-      icon: TrendingUp,
-      miniGauge:
-        uptime.uptimePct != null
-          ? { value: uptime.uptimePct, color: uptimeColor }
-          : null,
-    },
-    {
-      label: "Monitors",
-      value: String(monitors.length),
-      delta: monitors.length === 0 ? "Add your first" : "Active",
-      icon: Activity,
-      miniGauge: null,
-    },
-    {
-      label: "Active incidents",
-      value: String(activeIncidentCount),
-      delta: activeIncidentCount === 0 ? "All clear" : "Attention required",
-      icon: Zap,
-      miniGauge: null,
-    },
-    {
-      label: "Avg. latency (24h)",
-      value: avgMs == null ? "—" : `${avgMs}ms`,
-      delta: avgMs == null ? "No data yet" : "UP checks only",
-      icon: Clock,
-      miniGauge: null,
-    },
-  ];
+  // -- Monitors gauge config --
+  const monitorsMax = Math.max(500, monitors.length);
 
   return (
     <>
@@ -208,76 +146,68 @@ export default async function OverviewPage() {
         }
       />
 
-      {/* System Health Hero */}
-      <div className="mb-6">
+      {/* Top row: three gauges — latency (left), health (center), monitors (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-4 mb-6 items-stretch">
+        <DashboardGaugeCard
+          label="Avg. Response Time"
+          value={latencyPct}
+          maxValue={latencyMax}
+          displayValue={avgMs != null ? `${avgMs}ms` : "—"}
+          color="#10B981"
+          subtitle="24h average"
+        />
         <SystemHealthGauge
           uptimePct={uptime.uptimePct}
           activeIncidents={activeIncidentCount}
-          totalMonitors={monitors.length}
           avgLatencyMs={avgMs}
+        />
+        <DashboardGaugeCard
+          label="Total Monitors"
+          value={monitors.length}
+          maxValue={monitorsMax}
+          displayValue={
+            monitors.length >= 1000
+              ? `${(monitors.length / 1000).toFixed(1)}K`
+              : String(monitors.length)
+          }
+          color="#2563EB"
+          subtitle={`${activeIncidentCount} active incident${activeIncidentCount !== 1 ? "s" : ""}`}
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {stats.map((s, i) => {
-          const Icon = s.icon;
-          return (
-            <Card
-              key={s.label}
-              className="animate-fade-up hover:border-[var(--border-strong)] transition-colors"
-              style={{ animationDelay: `${i * 60}ms` } as React.CSSProperties}
-            >
-              <CardBody>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider">
-                    {s.label}
-                  </div>
-                  <Icon className="w-4 h-4 text-[var(--text-subtle)]" />
+      {/* Bottom row: latency chart + top URLs card */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <Card className="animate-fade-up lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-[var(--text)]">
+                  Response time (24h)
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="font-mono text-2xl font-semibold text-[var(--text)]">
-                    {s.value}
-                  </div>
-                  {s.miniGauge && (
-                    <MiniGauge
-                      value={s.miniGauge.value}
-                      color={s.miniGauge.color}
-                    />
-                  )}
+                <div className="text-xs text-[var(--text-muted)] mt-0.5">
+                  Average latency across your monitors (UP checks only).
                 </div>
-                <div className="text-xs text-[var(--text-muted)] mt-1">{s.delta}</div>
-              </CardBody>
-            </Card>
-          );
-        })}
+              </div>
+              <Badge variant="accent">Live</Badge>
+            </div>
+          </CardHeader>
+          <CardBody>
+            <UptimeChart data={hourly} />
+          </CardBody>
+        </Card>
+
+        <TopUrlsCard urls={topUrls} />
       </div>
 
+      {/* Regional Health */}
       {regionalData.length > 0 && (
         <div className="mb-6">
           <RegionalHealth regions={regionalData} />
         </div>
       )}
 
-      <Card className="mb-6 animate-fade-up" style={{ animationDelay: "240ms" } as React.CSSProperties}>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-medium text-[var(--text)]">
-                Response time (24h)
-              </div>
-              <div className="text-xs text-[var(--text-muted)] mt-0.5">
-                Average latency across your monitors (UP checks only).
-              </div>
-            </div>
-            <Badge variant="accent">Live</Badge>
-          </div>
-        </CardHeader>
-        <CardBody>
-          <UptimeChart data={hourly} />
-        </CardBody>
-      </Card>
-
-      <Card className="animate-fade-up" style={{ animationDelay: "300ms" } as React.CSSProperties}>
+      {/* Recent incidents */}
+      <Card className="animate-fade-up">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="text-sm font-medium text-[var(--text)]">Recent incidents</div>

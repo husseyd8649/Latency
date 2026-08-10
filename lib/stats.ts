@@ -236,3 +236,96 @@ export async function recentChecksForSparklines(
 
   return result;
 }
+
+/**
+ * Top N monitors that are fastest AND currently UP with 100% uptime in the last N hours.
+ * Includes a small sparkline of recent response times.
+ */
+export async function topPerformingUrls(
+  userId: string,
+  take = 5,
+  hours = 24
+): Promise<{
+  id: string;
+  name: string;
+  target: string;
+  lastResponseTimeMs: number;
+  uptimePct: number;
+  spark: number[];
+}[]> {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+  const rows = await prisma.$queryRaw<
+    {
+      id: string;
+      name: string;
+      target: string;
+      lastResponseTimeMs: number;
+    }[]
+  >`
+    SELECT
+      m."id",
+      m."name",
+      m."target",
+      m."lastResponseTimeMs"
+    FROM "Monitor" m
+    WHERE m."userId" = ${userId}
+      AND m."isPaused" = false
+      AND m."lastStatus" = 'UP'
+      AND m."lastResponseTimeMs" IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM "Check" c
+        WHERE c."monitorId" = m."id"
+          AND c."checkedAt" >= ${since}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM "Check" c
+        WHERE c."monitorId" = m."id"
+          AND c."checkedAt" >= ${since}
+          AND c."status" != 'UP'
+      )
+    ORDER BY m."lastResponseTimeMs" ASC
+    LIMIT ${take}
+  `;
+
+  if (rows.length === 0) return [];
+
+  // Fetch recent checks for sparklines (last 10 per monitor) in one query
+  const ids = rows.map((r) => r.id);
+  const sparkRows = await prisma.$queryRaw<
+    { monitorId: string; responseTimeMs: number; checkedAt: Date }[]
+  >`
+    SELECT "monitorId", "responseTimeMs", "checkedAt"
+    FROM (
+      SELECT
+        "monitorId",
+        "responseTimeMs",
+        "checkedAt",
+        ROW_NUMBER() OVER (
+          PARTITION BY "monitorId"
+          ORDER BY "checkedAt" DESC
+        ) as rn
+      FROM "Check"
+      WHERE "monitorId" = ANY(${ids}::text[])
+        AND "status" = 'UP'
+        AND "responseTimeMs" IS NOT NULL
+    ) sub
+    WHERE rn <= 10
+    ORDER BY "monitorId", "checkedAt" ASC
+  `;
+
+  const sparkMap = new Map<string, number[]>();
+  for (const id of ids) sparkMap.set(id, []);
+  for (const r of sparkRows) {
+    sparkMap.get(r.monitorId)?.push(r.responseTimeMs);
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    target: r.target,
+    lastResponseTimeMs: r.lastResponseTimeMs,
+    uptimePct: 100,
+    spark: sparkMap.get(r.id) ?? [],
+  }));
+}
