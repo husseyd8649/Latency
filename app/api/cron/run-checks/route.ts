@@ -1,4 +1,3 @@
-// app/api/cron/run-checks/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runMonitorCheck, runWithConcurrency } from "@/lib/checkers/runner";
@@ -8,6 +7,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CONCURRENCY = 10;
+const CLEANUP_BATCH_SIZE = 5000;
+const RETENTION_DAYS = 30;
 
 export async function POST(req: Request) {
   // Auth: expect "Authorization: Bearer <CRON_SECRET>"
@@ -40,10 +41,39 @@ export async function POST(req: Request) {
   await runWithConcurrency(due, CONCURRENCY, (m) => runMonitorCheck(m));
   const durationMs = Date.now() - startedAt;
 
+  // -- Cleanup: delete old checks in bounded batches --
+  // Prevents Check table from growing unbounded, keeps queries fast.
+  // Runs after checks so it doesn't delay the actual monitoring work.
+  const cleanupStartedAt = Date.now();
+  let cleanupDeleted = 0;
+  try {
+    const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+
+    // Delete a bounded batch each run. Postgres doesn't support LIMIT in DELETE
+    // directly, so we use a subquery.
+    const result = await prisma.$executeRaw`
+      DELETE FROM "Check"
+      WHERE "id" IN (
+        SELECT "id" FROM "Check"
+        WHERE "checkedAt" < ${cutoff}
+        LIMIT ${CLEANUP_BATCH_SIZE}
+      )
+    `;
+    cleanupDeleted = Number(result);
+  } catch (e) {
+    // Don't fail the cron if cleanup errors — checks are the priority
+    console.error("Cleanup failed:", e);
+  }
+  const cleanupDurationMs = Date.now() - cleanupStartedAt;
+
   return NextResponse.json({
     ok: true,
     checked: due.length,
     durationMs,
+    cleanup: {
+      deleted: cleanupDeleted,
+      durationMs: cleanupDurationMs,
+    },
   });
 }
 
