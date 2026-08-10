@@ -20,14 +20,13 @@ import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { avgLatency, hourlyLatency, uptimeForMonitors } from "@/lib/stats";
 import { UptimeChart } from "@/components/uptime-chart";
-import { SystemHealthDonut } from "@/components/system-health-donut";
-import { MiniDonut } from "@/components/mini-donut";
+import { SystemHealthGauge } from "@/components/system-health-gauge";
+import { MiniGauge } from "@/components/mini-gauge";
 import { RegionalHealth } from "@/components/regional-health";
 
 export default async function OverviewPage() {
   const user = await requireUser();
 
-  // Now includes lastStatus so we don't need a separate DISTINCT ON query
   const monitors = await prisma.monitor.findMany({
     where: { userId: user.id },
     select: {
@@ -134,7 +133,6 @@ export default async function OverviewPage() {
     if (m.isPaused) {
       bucket.paused += 1;
     } else {
-      // Read directly from denormalized lastStatus - no DISTINCT ON needed!
       if (m.lastStatus === "UP") bucket.up += 1;
       else if (m.lastStatus === "DOWN") bucket.down += 1;
     }
@@ -167,7 +165,7 @@ export default async function OverviewPage() {
           ? "No data yet"
           : `${uptime.upChecks}/${uptime.totalChecks} checks`,
       icon: TrendingUp,
-      miniDonut:
+      miniGauge:
         uptime.uptimePct != null
           ? { value: uptime.uptimePct, color: uptimeColor }
           : null,
@@ -177,21 +175,21 @@ export default async function OverviewPage() {
       value: String(monitors.length),
       delta: monitors.length === 0 ? "Add your first" : "Active",
       icon: Activity,
-      miniDonut: null,
+      miniGauge: null,
     },
     {
       label: "Active incidents",
       value: String(activeIncidentCount),
       delta: activeIncidentCount === 0 ? "All clear" : "Attention required",
       icon: Zap,
-      miniDonut: null,
+      miniGauge: null,
     },
     {
       label: "Avg. latency (24h)",
       value: avgMs == null ? "—" : `${avgMs}ms`,
       delta: avgMs == null ? "No data yet" : "UP checks only",
       icon: Clock,
-      miniDonut: null,
+      miniGauge: null,
     },
   ];
 
@@ -210,10 +208,13 @@ export default async function OverviewPage() {
         }
       />
 
+      {/* System Health Hero */}
       <div className="mb-6">
-        <SystemHealthDonut
+        <SystemHealthGauge
           uptimePct={uptime.uptimePct}
           activeIncidents={activeIncidentCount}
+          totalMonitors={monitors.length}
+          avgLatencyMs={avgMs}
         />
       </div>
 
@@ -237,10 +238,10 @@ export default async function OverviewPage() {
                   <div className="font-mono text-2xl font-semibold text-[var(--text)]">
                     {s.value}
                   </div>
-                  {s.miniDonut && (
-                    <MiniDonut
-                      value={s.miniDonut.value}
-                      color={s.miniDonut.color}
+                  {s.miniGauge && (
+                    <MiniGauge
+                      value={s.miniGauge.value}
+                      color={s.miniGauge.color}
                     />
                   )}
                 </div>
