@@ -16,6 +16,7 @@ export function DashboardGaugeCard({
   displayValue,
   color = "#10B981",
   maxValue = 100,
+  maxLabel,
   subtitle,
 }: {
   label: string;
@@ -23,6 +24,7 @@ export function DashboardGaugeCard({
   displayValue: string;
   color?: string;
   maxValue?: number;
+  maxLabel?: string;
   subtitle?: string;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -93,7 +95,7 @@ export function DashboardGaugeCard({
             >
               0
             </text>
-            <text
+                        <text
               x="242"
               y="188"
               fontSize="11"
@@ -101,7 +103,7 @@ export function DashboardGaugeCard({
               textAnchor="end"
               style={{ fontFamily: "var(--font-mono)" }}
             >
-              {maxValue >= 1000 ? `${Math.round(maxValue / 1000)}K` : maxValue}
+              {maxLabel ?? (maxValue >= 1000 ? `${Math.round(maxValue / 1000)}K` : maxValue)}
             </text>
 
             {/* Centered value + subtitle inside gauge */}

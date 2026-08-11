@@ -1,5 +1,5 @@
 import { Card, CardBody } from "@/components/ui/primitives";
-import { Zap, TrendingUp, Trophy } from "lucide-react";
+import { TrendingUp, Trophy, Medal, Award } from "lucide-react";
 
 type TopUrl = {
   id: string;
@@ -10,12 +10,26 @@ type TopUrl = {
   spark: number[];
 };
 
-const RANK_COLORS = [
-  { bg: "bg-amber-400/15", text: "text-amber-500", border: "border-amber-400/30" },
-  { bg: "bg-slate-400/15", text: "text-slate-400", border: "border-slate-400/30" },
-  { bg: "bg-orange-500/15", text: "text-orange-500", border: "border-orange-500/30" },
-  { bg: "bg-[var(--surface-2)]", text: "text-[var(--text-muted)]", border: "border-[var(--border)]" },
-  { bg: "bg-[var(--surface-2)]", text: "text-[var(--text-muted)]", border: "border-[var(--border)]" },
+// Medal configuration: 1st = gold trophy, 2nd = silver medal, 3rd = bronze award, 4+ = numbered chip
+const rankConfig = [
+  {
+    icon: Trophy,
+    bg: "bg-amber-400/20",
+    text: "text-amber-500",
+    border: "border-amber-400/40",
+  },
+  {
+    icon: Medal,
+    bg: "bg-slate-400/20",
+    text: "text-slate-500",
+    border: "border-slate-400/40",
+  },
+  {
+    icon: Award,
+    bg: "bg-orange-500/20",
+    text: "text-orange-600",
+    border: "border-orange-500/40",
+  },
 ];
 
 export function TopUrlsCard({ urls }: { urls: TopUrl[] }) {
@@ -51,19 +65,26 @@ export function TopUrlsCard({ urls }: { urls: TopUrl[] }) {
         ) : (
           <ul className="divide-y divide-[var(--border)]">
             {urls.map((u, i) => {
-              const rank = RANK_COLORS[i] ?? RANK_COLORS[3];
+              const medal = rankConfig[i];
               return (
                 <li
                   key={u.id}
                   className="px-5 py-3 hover:bg-[var(--surface-2)]/60 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    {/* Rank badge */}
-                    <div
-                      className={`w-7 h-7 rounded-full border ${rank.bg} ${rank.text} ${rank.border} flex items-center justify-center text-xs font-bold shrink-0`}
-                    >
-                      {i + 1}
-                    </div>
+                    {/* Medal or numbered chip */}
+                    {medal ? (
+                      <div
+                        className={`w-8 h-8 rounded-full border ${medal.bg} ${medal.text} ${medal.border} flex items-center justify-center shrink-0 shadow-[var(--shadow-sm)]`}
+                        title={`Rank ${i + 1}`}
+                      >
+                        <medal.icon className="w-4 h-4" />
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-muted)] flex items-center justify-center text-xs font-bold shrink-0">
+                        {i + 1}
+                      </div>
+                    )}
 
                     {/* Name + target */}
                     <div className="flex-1 min-w-0">
@@ -85,7 +106,9 @@ export function TopUrlsCard({ urls }: { urls: TopUrl[] }) {
                     <div className="text-right shrink-0 min-w-[54px]">
                       <div className="font-mono text-sm font-bold text-[var(--accent)]">
                         {u.lastResponseTimeMs}
-                        <span className="text-[10px] font-normal text-[var(--text-muted)] ml-0.5">ms</span>
+                        <span className="text-[10px] font-normal text-[var(--text-muted)] ml-0.5">
+                          ms
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -98,8 +121,6 @@ export function TopUrlsCard({ urls }: { urls: TopUrl[] }) {
     </Card>
   );
 }
-
-/* -------------------------------------------------------------------------- */
 
 function MiniSpark({ data }: { data: number[] }) {
   if (data.length < 2) {

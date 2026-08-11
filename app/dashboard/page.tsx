@@ -148,10 +148,11 @@ export default async function OverviewPage() {
 
       {/* Top row: three gauges — latency (left), health (center), monitors (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-4 mb-6 items-stretch">
-        <DashboardGaugeCard
+                <DashboardGaugeCard
           label="Avg. Response Time"
           value={latencyPct}
           maxValue={latencyMax}
+          maxLabel="2s"
           displayValue={avgMs != null ? `${avgMs}ms` : "—"}
           color="#10B981"
           subtitle="24h average"
@@ -206,23 +207,38 @@ export default async function OverviewPage() {
         </div>
       )}
 
-      {/* Recent incidents */}
-      <Card className="animate-fade-up">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-medium text-[var(--text)]">Recent incidents</div>
-            <Link
-              href="/dashboard/incidents"
-              className="text-xs text-[var(--accent)] hover:text-[var(--accent-hover)]"
-            >
-              View all
-            </Link>
+            {/* Recent incidents */}
+      <Card className="animate-fade-up overflow-hidden">
+        <div className="px-5 pt-5 pb-3 border-b border-[var(--border)] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-md bg-[var(--down-soft)] text-[var(--op-down)] flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-[var(--text)] leading-tight">
+                Recent Incidents
+              </div>
+              <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mt-0.5">
+                Latest downtime events
+              </div>
+            </div>
           </div>
-        </CardHeader>
-        <CardBody>
+          <Link
+            href="/dashboard/incidents"
+            className="text-[10px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors inline-flex items-center gap-1"
+          >
+            View all →
+          </Link>
+        </div>
+        <CardBody className="p-0">
           {recentIncidents.length === 0 ? (
-            <div className="text-sm text-[var(--text-muted)] text-center py-8">
-              No incidents recorded. All quiet.
+            <div className="text-center py-10 px-5">
+              <div className="w-10 h-10 rounded-full bg-[var(--up-soft)] border border-[var(--op-up)]/25 mx-auto flex items-center justify-center mb-2">
+                <AlertTriangle className="w-4 h-4 text-[var(--op-up)]" />
+              </div>
+              <div className="text-xs text-[var(--text-muted)]">
+                No incidents recorded. All quiet.
+              </div>
             </div>
           ) : (
             <ul className="divide-y divide-[var(--border)]">
@@ -232,33 +248,45 @@ export default async function OverviewPage() {
                   (inc.resolvedAt ?? new Date()).getTime() -
                   inc.startedAt.getTime();
                 return (
-                  <li key={inc.id} className="py-3 flex items-center gap-3">
-                    <div
-                      className={`w-8 h-8 rounded-md flex items-center justify-center ${
-                        resolved
-                          ? "bg-[var(--up-soft)] text-[var(--op-up)]"
-                          : "bg-[var(--down-soft)] text-[var(--op-down)]"
-                      }`}
-                    >
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-[var(--text)] truncate">
-                        {inc.monitor.name}{" "}
-                        <span className="text-[10px] font-mono text-[var(--text-subtle)] ml-1">
-                          {inc.monitor.type}
-                        </span>
+                  <li
+                    key={inc.id}
+                    className="px-5 py-3 hover:bg-[var(--surface-2)]/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Status badge with icon */}
+                      <div
+                        className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 shadow-[var(--shadow-sm)] ${
+                          resolved
+                            ? "bg-[var(--up-soft)] text-[var(--op-up)] border-[var(--op-up)]/30"
+                            : "bg-[var(--down-soft)] text-[var(--op-down)] border-[var(--op-down)]/30"
+                        }`}
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5" />
                       </div>
-                      <div className="text-[10px] text-[var(--text-muted)] truncate">
-                        {inc.cause ?? "Check failed"}
+
+                      {/* Monitor name + cause */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-[var(--text)] truncate">
+                            {inc.monitor.name}
+                          </span>
+                          <span className="text-[10px] font-mono text-[var(--text-subtle)] uppercase tracking-wider shrink-0">
+                            {inc.monitor.type}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">
+                          {inc.cause ?? "Check failed"}
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant={resolved ? "up" : "down"}>
-                        {resolved ? "Resolved" : "Ongoing"}
-                      </Badge>
-                      <div className="text-[10px] text-[var(--text-subtle)] mt-1 font-mono">
-                        {formatDuration(durMs)}
+
+                      {/* Status + duration */}
+                      <div className="text-right shrink-0">
+                        <Badge variant={resolved ? "up" : "down"}>
+                          {resolved ? "Resolved" : "Ongoing"}
+                        </Badge>
+                        <div className="text-[10px] text-[var(--text-subtle)] mt-1 font-mono">
+                          {formatDuration(durMs)}
+                        </div>
                       </div>
                     </div>
                   </li>
