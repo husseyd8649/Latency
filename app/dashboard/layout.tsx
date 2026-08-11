@@ -1,4 +1,3 @@
-// app/dashboard/layout.tsx
 import { Sidebar } from "@/components/Sidebar";
 import { auth } from "@/auth";
 
@@ -12,7 +11,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen bg-[var(--bg)]">
       <Sidebar userEmail={session?.user?.email} />
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 transition-all duration-300">
         <div className="max-w-6xl mx-auto p-8">{children}</div>
       </main>
     </div>

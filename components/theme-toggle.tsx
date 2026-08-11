@@ -12,7 +12,7 @@ const options = [
   { key: "dark", label: "Dark", Icon: Moon },
 ] as const;
 
-export function ThemeToggle() {
+export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -20,6 +20,31 @@ export function ThemeToggle() {
 
   const current = mounted ? theme ?? "corporate" : "corporate";
 
+  /* -------- Compact mode: single button that cycles through themes -------- */
+  if (compact) {
+    const currentIndex = options.findIndex((o) => o.key === current);
+    const activeOption = options[currentIndex >= 0 ? currentIndex : 0];
+    const nextOption =
+      options[(currentIndex >= 0 ? currentIndex + 1 : 1) % options.length];
+    const Icon = activeOption.Icon;
+
+    return (
+      <button
+        type="button"
+        aria-label={`Theme: ${activeOption.label}. Click to switch to ${nextOption.label}.`}
+        title={`${activeOption.label} — click for ${nextOption.label}`}
+        onClick={() => setTheme(nextOption.key)}
+        className={cn(
+          "inline-flex items-center justify-center w-10 h-10 rounded-md transition-all duration-200 active:scale-90",
+          "bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--surface-2)]"
+        )}
+      >
+        <Icon className="w-4 h-4" />
+      </button>
+    );
+  }
+
+  /* -------- Default mode: full three-button segmented control -------- */
   return (
     <div
       role="radiogroup"
