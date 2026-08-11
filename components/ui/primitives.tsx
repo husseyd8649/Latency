@@ -12,9 +12,9 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)] transition-colors",
-        className
-      )}
+  "rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)] card-hover",
+  className
+)}
       {...rest}
     >
       {children}
@@ -42,8 +42,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref
 ) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none";
-  const sizes: Record<string, string> = {
+  "inline-flex items-center justify-center gap-2 rounded-md font-medium press disabled:opacity-50 disabled:pointer-events-none";
+    const sizes: Record<string, string> = {
     sm: "h-8 px-3 text-xs",
     md: "h-9 px-4 text-sm",
   };
@@ -93,10 +93,10 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs font-medium",
-        styles[variant],
-        className
-      )}
+  "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs font-medium badge-pop",
+  styles[variant],
+  className
+)}
     >
       {children}
     </span>

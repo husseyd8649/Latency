@@ -15,6 +15,7 @@ import { DeleteAllButton } from "@/components/delete-all-button";
 import { RegionFilterBar } from "@/components/region-filter-bar";
 import { recentChecksForSparklines } from "@/lib/stats";
 import { bulkUpdateInterval } from "./actions";
+import { RegionFilterDropdown } from "@/components/region-filter-dropdown";
 
 export default async function MonitorsPage({
   searchParams,
@@ -135,22 +136,30 @@ export default async function MonitorsPage({
   return (
     <>
       <PageHeader
-        title="Monitors"
-        description="All checks in your workspace."
-        actions={
-          <>
-            <BulkIntervalForm />
-            <DeleteAllButton count={totalCount} />
-            <RunAllButton count={activeCount} />
-            <Link href="/dashboard/add">
-              <Button size="sm">
-                <PlusCircle className="w-3.5 h-3.5" />
-                New monitor
-              </Button>
-            </Link>
-          </>
-        }
+  title="Monitors"
+  description="All checks in your workspace."
+  actions={
+    <>
+      <RegionFilterDropdown
+        regions={regions.map((r) => ({
+          id: r.id,
+          name: r.name,
+          slug: r.slug,
+          color: r.color,
+        }))}
       />
+      <BulkIntervalForm />
+      <DeleteAllButton count={totalCount} />
+      <RunAllButton count={activeCount} />
+      <Link href="/dashboard/add">
+        <Button size="sm">
+          <PlusCircle className="w-3.5 h-3.5" />
+          New monitor
+        </Button>
+      </Link>
+    </>
+  }
+/>
 
       {activeFilter && (
         <RegionFilterBar

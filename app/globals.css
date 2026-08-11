@@ -153,6 +153,21 @@ html, body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%      { opacity: 0.55; transform: scale(0.9); }
@@ -168,9 +183,121 @@ html, body {
   100% { transform: translateX(200%); }
 }
 
-.animate-fade-up { animation: fade-up 0.4s ease-out both; }
-.animate-pulse-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
-.animate-scan { animation: scan 3.5s ease-in-out infinite; }
+@keyframes save-flash {
+  0%   { box-shadow: 0 0 0 0 var(--accent); }
+  50%  { box-shadow: 0 0 0 4px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes check-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-fade-up    { animation: fade-up 0.4s ease-out both; }
+.animate-fade-in    { animation: fade-in 0.3s ease-out both; }
+.animate-scale-in   { animation: scale-in 0.2s ease-out both; }
+.animate-slide-down { animation: slide-down 0.25s ease-out both; }
+.animate-pulse-dot  { animation: pulse-dot 1.6s ease-in-out infinite; }
+.animate-scan       { animation: scan 3.5s ease-in-out infinite; }
+.animate-save-flash { animation: save-flash 0.6s ease-out both; }
+.animate-check-pop  { animation: check-pop 0.35s ease-out both; }
+
+/* -------------------------------------------------------------------------- */
+/*  Interactive micro-transitions                                              */
+/* -------------------------------------------------------------------------- */
+
+/* Card lift on hover */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Row highlight slide — use on <tr> or <li> elements */
+.row-hover {
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+.row-hover::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 0 1px 1px 0;
+  transform: scaleY(0);
+  transition: transform 0.2s ease;
+}
+.row-hover:hover::before {
+  transform: scaleY(1);
+}
+
+/* Button press */
+.press {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.press:hover {
+  transform: translateY(-0.5px);
+}
+.press:active {
+  transform: translateY(0.5px) scale(0.98);
+}
+
+/* Badge subtle pulse on mount */
+.badge-pop {
+  animation: scale-in 0.2s ease-out both;
+}
+
+/* Link underline reveal */
+.link-reveal {
+  position: relative;
+}
+.link-reveal::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 1px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.25s ease;
+}
+.link-reveal:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* Icon spin on hover (for action icons) */
+.icon-hover {
+  transition: transform 0.2s ease, color 0.15s ease;
+}
+.icon-hover:hover {
+  transform: rotate(8deg) scale(1.1);
+}
+
+/* Staggered list children — apply .stagger-list on parent, children auto-animate */
+.stagger-list > * {
+  animation: fade-up 0.35s ease-out both;
+}
+.stagger-list > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger-list > *:nth-child(2)  { animation-delay: 40ms; }
+.stagger-list > *:nth-child(3)  { animation-delay: 80ms; }
+.stagger-list > *:nth-child(4)  { animation-delay: 120ms; }
+.stagger-list > *:nth-child(5)  { animation-delay: 160ms; }
+.stagger-list > *:nth-child(6)  { animation-delay: 200ms; }
+.stagger-list > *:nth-child(7)  { animation-delay: 240ms; }
+.stagger-list > *:nth-child(8)  { animation-delay: 280ms; }
+.stagger-list > *:nth-child(9)  { animation-delay: 320ms; }
+.stagger-list > *:nth-child(10) { animation-delay: 360ms; }
+.stagger-list > *:nth-child(n+11) { animation-delay: 400ms; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

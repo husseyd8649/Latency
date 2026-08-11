@@ -9,14 +9,16 @@ import {
   Play,
   Trash2,
   Zap,
-  FlaskConical,
   Pencil,
 } from "lucide-react";
 import { Badge, StatusDot } from "@/components/ui/primitives";
 import { Sparkline } from "@/components/sparkline";
 import { deleteMonitor, togglePause } from "@/app/dashboard/monitors/actions";
 import { runNow } from "@/app/dashboard/monitors/run-now";
-import { EditMonitorModal, type EditableMonitor } from "@/components/edit-monitor-modal";
+import {
+  EditMonitorModal,
+  type EditableMonitor,
+} from "@/components/edit-monitor-modal";
 import { cn } from "@/lib/utils";
 
 const typeIconMap = {
@@ -58,14 +60,10 @@ export function MonitorRow({
   m: MonitorRowData;
   regions?: Region[];
 }) {
-  const [simulated, setSimulated] = useState(false);
   const [editing, setEditing] = useState(false);
 
   const TypeIcon = typeIconMap[m.type];
-  const realState = deriveState(m.isPaused, m.last?.status);
-  const state = simulated
-    ? { dot: "down" as const, badge: "down" as const, label: "Simulated" }
-    : realState;
+  const state = deriveState(m.isPaused, m.last?.status);
 
   const editable: EditableMonitor = {
     id: m.id,
@@ -80,17 +78,14 @@ export function MonitorRow({
 
   return (
     <>
-      <tr
-        className={cn(
-          "border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]/50 transition-colors",
-          simulated && "bg-[var(--down-soft)]"
-        )}
-      >
+      <tr className="border-b border-[var(--border)] last:border-0 group transition-colors duration-200 hover:bg-[var(--surface-2)]/50">
         <td className="px-3 py-3 align-middle pl-5">
           <StatusDot variant={state.dot} />
         </td>
         <td className="px-3 py-3 align-middle">
-          <div className="font-medium text-[var(--text)]">{m.name}</div>
+          <div className="font-medium text-[var(--text)] transition-colors duration-150 group-hover:text-[var(--accent)]">
+            {m.name}
+          </div>
           <div className="text-[10px] text-[var(--text-subtle)] mt-0.5">
             <RelativeTime
               iso={m.last ? m.last.checkedAt : m.createdAt}
@@ -117,12 +112,14 @@ export function MonitorRow({
         </td>
         <td className="px-3 py-3 align-middle">
           <span className="font-mono text-xs text-[var(--text-muted)]">
-            {m.last?.responseTimeMs != null ? `${m.last.responseTimeMs}ms` : "—"}
+            {m.last?.responseTimeMs != null
+              ? `${m.last.responseTimeMs}ms`
+              : "—"}
           </span>
         </td>
         <td className="px-3 py-3 align-middle">
           <Badge variant={state.badge}>{state.label}</Badge>
-          {!simulated && m.last?.error && (
+          {m.last?.error && (
             <div
               className="text-[10px] text-[var(--op-down)] mt-1 truncate max-w-[200px]"
               title={m.last.error}
@@ -133,57 +130,50 @@ export function MonitorRow({
         </td>
         <td className="px-3 py-3 align-middle text-right pr-5">
           <div className="inline-flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setSimulated((s) => !s)}
-              className={cn(
-                "p-1.5 rounded-md transition-colors",
-                simulated
-                  ? "text-[var(--op-down)] bg-[var(--down-soft)]"
-                  : "text-[var(--text-muted)] hover:text-[var(--op-degraded)] hover:bg-[var(--surface-2)]"
-              )}
-              title={simulated ? "Stop simulation" : "Simulate incident (visual only)"}
-            >
-              <FlaskConical className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
+            <ActionButton
               onClick={() => setEditing(true)}
-              className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] transition-colors"
               title="Edit"
+              hoverClass="hover:text-[var(--accent)] hover:bg-[var(--accent-soft)]"
             >
               <Pencil className="w-3.5 h-3.5" />
-            </button>
+            </ActionButton>
+
             <form action={runNow}>
               <input type="hidden" name="id" value={m.id} />
-              <button
+              <ActionButton
                 type="submit"
-                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-40 disabled:pointer-events-none"
                 title="Run now"
                 disabled={m.isPaused}
+                hoverClass="hover:text-[var(--accent)] hover:bg-[var(--accent-soft)]"
               >
                 <Zap className="w-3.5 h-3.5" />
-              </button>
+              </ActionButton>
             </form>
+
             <form action={togglePause}>
               <input type="hidden" name="id" value={m.id} />
-              <button
+              <ActionButton
                 type="submit"
-                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
                 title={m.isPaused ? "Resume" : "Pause"}
+                hoverClass="hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
               >
-                {m.isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
-              </button>
+                {m.isPaused ? (
+                  <Play className="w-3.5 h-3.5" />
+                ) : (
+                  <Pause className="w-3.5 h-3.5" />
+                )}
+              </ActionButton>
             </form>
+
             <form action={deleteMonitor}>
               <input type="hidden" name="id" value={m.id} />
-              <button
+              <ActionButton
                 type="submit"
-                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--op-down)] hover:bg-[var(--surface-2)] transition-colors"
                 title="Delete"
+                hoverClass="hover:text-[var(--op-down)] hover:bg-[var(--down-soft)]"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              </ActionButton>
             </form>
           </div>
         </td>
@@ -199,6 +189,44 @@ export function MonitorRow({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Shared action button                                                       */
+/* -------------------------------------------------------------------------- */
+
+function ActionButton({
+  children,
+  title,
+  onClick,
+  type = "button",
+  disabled,
+  hoverClass = "hover:text-[var(--text)] hover:bg-[var(--surface-2)]",
+}: {
+  children: React.ReactNode;
+  title: string;
+  onClick?: () => void;
+  type?: "button" | "submit";
+  disabled?: boolean;
+  hoverClass?: string;
+}) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "p-1.5 rounded-md text-[var(--text-muted)] transition-all duration-200 active:scale-90",
+        "disabled:opacity-40 disabled:pointer-events-none",
+        hoverClass
+      )}
+      title={title}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
 
 function RelativeTime({ iso, prefix }: { iso: string; prefix: string }) {
@@ -222,24 +250,24 @@ function RelativeTime({ iso, prefix }: { iso: string; prefix: string }) {
 }
 
 function deriveState(paused: boolean, last?: "UP" | "DOWN") {
-  if (paused) return { dot: "neutral" as const, badge: "neutral" as const, label: "Paused" };
-  if (!last) return { dot: "neutral" as const, badge: "neutral" as const, label: "Pending" };
-  if (last === "UP") return { dot: "up" as const, badge: "up" as const, label: "Up" };
+  if (paused)
+    return {
+      dot: "neutral" as const,
+      badge: "neutral" as const,
+      label: "Paused",
+    };
+  if (!last)
+    return {
+      dot: "neutral" as const,
+      badge: "neutral" as const,
+      label: "Pending",
+    };
+  if (last === "UP")
+    return { dot: "up" as const, badge: "up" as const, label: "Up" };
   return { dot: "down" as const, badge: "down" as const, label: "Down" };
 }
 
 function formatRelative(date: Date): string {
-  const diff = Date.now() - date.getTime();
-  const secs = Math.floor(diff / 1000);
-  if (secs < 60) return `${secs}s ago`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
-function formatRelative2(date: Date): string {
   const diff = Date.now() - date.getTime();
   const secs = Math.floor(diff / 1000);
   if (secs < 60) return `${secs}s ago`;
