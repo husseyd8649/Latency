@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const CONCURRENCY = 10;
 const CLEANUP_BATCH_SIZE = 5000;
-const RETENTION_DAYS = 30;
+const RETENTION_DAYS = 7; // CHANGED: 30 → 7 days
 
 export async function POST(req: Request) {
   // Auth: expect "Authorization: Bearer <CRON_SECRET>"
@@ -42,15 +42,14 @@ export async function POST(req: Request) {
   const durationMs = Date.now() - startedAt;
 
   // -- Cleanup: delete old checks in bounded batches --
-  // Prevents Check table from growing unbounded, keeps queries fast.
-  // Runs after checks so it doesn't delay the actual monitoring work.
   const cleanupStartedAt = Date.now();
   let cleanupDeleted = 0;
+  let incidentsDeleted = 0; // NEW
+  
   try {
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
-    // Delete a bounded batch each run. Postgres doesn't support LIMIT in DELETE
-    // directly, so we use a subquery.
+    // 1. Cleanup old checks (bounded batch)
     const result = await prisma.$executeRaw`
       DELETE FROM "Check"
       WHERE "id" IN (
@@ -60,10 +59,21 @@ export async function POST(req: Request) {
       )
     `;
     cleanupDeleted = Number(result);
+
+    // 2. Cleanup old resolved incidents (NEW - 90 days)
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const incidentResult = await prisma.incident.deleteMany({
+      where: {
+        resolvedAt: { not: null },
+        startedAt: { lt: ninetyDaysAgo }
+      }
+    });
+    incidentsDeleted = incidentResult.count;
+    
   } catch (e) {
-    // Don't fail the cron if cleanup errors — checks are the priority
     console.error("Cleanup failed:", e);
   }
+  
   const cleanupDurationMs = Date.now() - cleanupStartedAt;
 
   return NextResponse.json({
@@ -72,12 +82,12 @@ export async function POST(req: Request) {
     durationMs,
     cleanup: {
       deleted: cleanupDeleted,
+      incidentsDeleted: incidentsDeleted, // NEW
       durationMs: cleanupDurationMs,
     },
   });
 }
 
-// Handy for cron services that only support GET
 export async function GET(req: Request) {
   return POST(req);
 }

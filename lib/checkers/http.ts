@@ -31,13 +31,17 @@ export async function checkHttp(opts: {
     });
 
     const responseTimeMs = Math.round(performance.now() - start);
-    const ok = res.status === opts.expectedStatus;
+    
+    // Accept 2xx range when expecting 200, otherwise exact match
+    const isSuccess = opts.expectedStatus === 200 
+      ? res.status >= 200 && res.status < 300
+      : res.status === opts.expectedStatus;
 
     return {
-      status: ok ? "UP" : "DOWN",
+      status: isSuccess ? "UP" : "DOWN",
       responseTimeMs,
       statusCode: res.status,
-      error: ok ? null : `Expected ${opts.expectedStatus}, got ${res.status}`,
+      error: isSuccess ? null : `Expected ${opts.expectedStatus}, got ${res.status}`,
     };
   } catch (err) {
     const responseTimeMs = Math.round(performance.now() - start);
