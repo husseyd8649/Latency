@@ -1,9 +1,9 @@
 import Link from "next/link";
+import Image from "next/image";
 import { auth } from "@/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button, Badge } from "@/components/ui/primitives";
-import { LandingMiniGauge } from "@/components/landing-mini-gauge";
-import { LandingMiniSparkline } from "@/components/landing-mini-sparkline";
+import { OptimizedHeroImage } from "@/components/optimized-hero-image";
 import {
   Activity,
   ArrowRight,
@@ -15,9 +15,9 @@ import {
   Check,
   Minus,
   Trophy,
-  TrendingUp,
   Sparkles,
   Layers,
+  TrendingUp,
 } from "lucide-react";
 
 export default async function Landing() {
@@ -107,9 +107,8 @@ export default async function Landing() {
         </div>
       </header>
 
-      {/* Hero — with gauge visual */}
+      {/* Hero */}
       <section className="border-b border-[var(--border)] relative overflow-hidden">
-        {/* Ambient glow */}
         <div
           className="absolute inset-0 opacity-[0.06] pointer-events-none"
           style={{
@@ -123,15 +122,15 @@ export default async function Landing() {
           }}
         />
 
-        <div className="max-w-6xl mx-auto px-6 py-20 relative">
-          <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-12 items-center">
+        <div className="max-w-6xl mx-auto px-6 py-16 lg:py-20 relative">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1.3fr] gap-12 lg:gap-16 items-center">
             {/* Left: copy */}
-            <div>
+            <div className="max-w-xl">
               <Badge variant="accent" className="mb-5">
                 <Sparkles className="w-3 h-3" />
                 MVP prototype
               </Badge>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-[var(--text)] leading-[1.05]">
+              <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold tracking-tight text-[var(--text)] leading-[1.05]">
                 Uptime monitoring for teams that{" "}
                 <span
                   className="bg-clip-text text-transparent"
@@ -143,7 +142,7 @@ export default async function Landing() {
                   ship.
                 </span>
               </h1>
-              <p className="mt-5 text-base md:text-lg text-[var(--text-muted)] max-w-xl leading-relaxed">
+              <p className="mt-5 text-base md:text-lg text-[var(--text-muted)] leading-relaxed">
                 HTTP, TCP, and SSL checks. Public status pages. HMAC-signed
                 webhooks. Bulk CSV import. Live in under five minutes.
               </p>
@@ -159,7 +158,6 @@ export default async function Landing() {
                 </Link>
               </div>
 
-              {/* Micro-signal row */}
               <div className="mt-8 flex items-center gap-5 text-xs text-[var(--text-muted)]">
                 <div className="flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5 text-[var(--op-up)]" strokeWidth={3} />
@@ -176,115 +174,215 @@ export default async function Landing() {
               </div>
             </div>
 
-            {/* Right: gauge visual */}
-            <div className="hidden lg:flex justify-center">
-              <div className="relative rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-md)] p-6 w-full max-w-[280px]">
-                <div
-                  className="absolute inset-0 opacity-[0.08] pointer-events-none rounded-2xl"
-                  style={{
-                    background: `radial-gradient(ellipse 60% 55% at 50% 45%, #3B82F6, transparent 70%)`,
-                  }}
-                />
-                <div className="relative flex flex-col items-center">
-                  <LandingMiniGauge
-                    value={99.92}
-                    label="SITE HEALTH"
-                    displayValue="99"
-                    tierLabel="EXCELLENT"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Product snapshot */}
-          <div className="mt-14 rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-md)] overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)] bg-[var(--surface-2)]">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <div className="w-2.5 h-2.5 rounded-full bg-[var(--op-down)]/60" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-[var(--op-degraded)]/60" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-[var(--op-up)]/60" />
-                </div>
-                <div className="text-xs font-mono text-[var(--text-muted)] ml-2">
-                  latency.app / dashboard
-                </div>
-              </div>
-              <Badge variant="up">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--op-up)] animate-pulse-dot" />
-                Operational
-              </Badge>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[var(--border)]">
-              <Stat label="Monitors" value="500" />
-              <Stat label="Uptime (24h)" value="99.92%" trend="up" />
-              <div className="p-4 text-center flex flex-col items-center justify-center">
-                <div className="text-[10px] uppercase tracking-wider text-[var(--text-subtle)] mb-2">
-                  Response Trend
-                </div>
-                <LandingMiniSparkline />
-              </div>
-              <Stat label="Active incidents" value="2" trend="none" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="features" className="border-b border-[var(--border)]">
-        <div className="max-w-6xl mx-auto px-6 py-20">
-          <div className="max-w-2xl">
-            <Badge variant="neutral" className="mb-4">
-              <Layers className="w-3 h-3" />
-              Features
-            </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-              Everything you need.{" "}
-              <span className="text-[var(--text-muted)]">Nothing extra.</span>
-            </h2>
-            <p className="text-[var(--text-muted)] mt-3 text-base leading-relaxed">
-              A focused toolkit for teams that value speed and clarity.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-10">
-            {features.map((f) => {
-              const Icon = f.icon;
-              return (
-                <div
-                  key={f.title}
-                  className="group relative p-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all overflow-hidden"
-                >
-                  {/* Soft accent glow on hover */}
-                  <div
-                    className="absolute inset-0 opacity-0 group-hover:opacity-[0.05] transition-opacity pointer-events-none"
-                    style={{
-                      background: `radial-gradient(ellipse 60% 60% at 30% 30%, ${f.accent}, transparent 70%)`,
-                    }}
-                  />
-                  <div className="relative">
-                    <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center mb-4 shadow-[var(--shadow-sm)]"
-                      style={{
-                        backgroundColor: `${f.accent}20`,
-                        color: f.accent,
-                      }}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="text-sm font-semibold text-[var(--text)]">
-                      {f.title}
-                    </div>
-                    <div className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
-                      {f.desc}
+            {/* Right: Screenshot with skeleton loader */}
+            <div className="relative lg:translate-y-4">
+              <div
+                className="absolute -inset-4 opacity-20 blur-3xl pointer-events-none rounded-full"
+                style={{
+                  background: `linear-gradient(135deg, #2DD4BF 0%, #2563EB 100%)`,
+                }}
+              />
+              
+              <div className="relative rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-xl)] overflow-hidden ring-1 ring-black/5">
+                {/* Browser chrome */}
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-2)]">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-red-400/80" />
+                    <div className="w-3 h-3 rounded-full bg-amber-400/80" />
+                    <div className="w-3 h-3 rounded-full bg-emerald-400/80" />
+                  </div>
+                  <div className="flex-1 text-center">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-[var(--surface)] text-[10px] text-[var(--text-muted)] font-mono border border-[var(--border)]">
+                      <div className="w-3 h-3 rounded-sm bg-[var(--accent)] flex items-center justify-center">
+                        <Zap className="w-2 h-2 text-white" strokeWidth={3} />
+                      </div>
+                      latency.app/dashboard
                     </div>
                   </div>
+                  <div className="w-16" />
                 </div>
-              );
-            })}
+
+                <OptimizedHeroImage 
+                  src="/dashboard-screenshot.png" 
+                  alt="Latency dashboard showing uptime monitoring overview with gauges, regional health status, and response time charts" 
+                />
+              </div>
+
+              <div className="absolute -bottom-3 -right-3 md:bottom-6 md:-right-6">
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-lg)]">
+                  <div className="w-2 h-2 rounded-full bg-[var(--op-up)] animate-pulse" />
+                  <span className="text-xs font-medium text-[var(--text)]">Live monitoring active</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
+
+      {/* Features - Bento Grid */}
+<section id="features" className="border-b border-[var(--border)]">
+  <div className="max-w-6xl mx-auto px-6 py-20">
+    <div className="max-w-2xl mb-12">
+      <Badge variant="neutral" className="mb-4">
+        <Layers className="w-3 h-3" />
+        Features
+      </Badge>
+      <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+        Everything you need.{" "}
+        <span className="text-[var(--text-muted)]">Nothing extra.</span>
+      </h2>
+      <p className="text-[var(--text-muted)] mt-3 text-base leading-relaxed">
+        A focused toolkit for teams that value speed and clarity.
+      </p>
+    </div>
+
+    {/* Bento Grid */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 auto-rows-[160px] md:auto-rows-[200px]">
+      
+      {/* Large card: Multi-protocol (spans 2x2) */}
+<div className="md:col-span-2 md:row-span-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden group hover:border-[var(--border-strong)] transition-all flex flex-col">
+  <div className="p-6 flex-1 flex flex-col">
+    <div className="w-10 h-10 rounded-lg bg-[#2DD4BF]/10 flex items-center justify-center mb-4">
+      <Activity className="w-4 h-4 text-[#2DD4BF]" />
+    </div>
+    <h3 className="text-lg font-semibold mb-2">Multi-protocol monitoring</h3>
+    <p className="text-sm text-[var(--text-muted)] mb-4 max-w-md">
+      HTTP endpoints, TCP ports, and SSL certificate expiry—all in one unified dashboard.
+    </p>
+    <div className="flex-1 relative rounded-lg border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden mt-auto min-h-[220px]">
+      <Image
+        src="/features-protocols.png"
+        alt="Monitor creation interface showing HTTP, TCP, and SSL options"
+        fill
+        className="object-cover object-[center_15%] group-hover:scale-105 transition-transform duration-700"
+        sizes="(max-width: 768px) 100vw, 66vw"
+        loading="lazy"
+      />
+    </div>
+  </div>
+</div>
+
+      {/* Standard icon card: Status pages */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all flex flex-col justify-center">
+        <div className="w-10 h-10 rounded-lg bg-[#2563EB]/10 flex items-center justify-center mb-4">
+          <Globe className="w-4 h-4 text-[#2563EB]" />
+        </div>
+        <h3 className="text-sm font-semibold">Public status pages</h3>
+        <p className="text-xs text-[var(--text-muted)] mt-2 leading-relaxed">
+          Share real-time uptime with customers on a branded subdomain. No code required.
+        </p>
+      </div>
+
+      {/* Standard icon card: Webhooks */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all flex flex-col justify-center">
+        <div className="w-10 h-10 rounded-lg bg-[#7C3AED]/10 flex items-center justify-center mb-4">
+          <Webhook className="w-4 h-4 text-[#7C3AED]" />
+        </div>
+        <h3 className="text-sm font-semibold">HMAC-signed webhooks</h3>
+        <p className="text-xs text-[var(--text-muted)] mt-2 leading-relaxed">
+          Cryptographically verified payloads. Your systems know it's really us.
+        </p>
+      </div>
+
+      {/* Wide card: Incidents (spans 2 cols) */}
+      <div className="md:col-span-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden group hover:border-[var(--border-strong)] transition-all">
+        <div className="grid grid-cols-1 sm:grid-cols-2 h-full">
+          <div className="p-6 flex flex-col justify-center">
+            <div className="w-10 h-10 rounded-lg bg-[#EC4899]/10 flex items-center justify-center mb-4">
+              <Bell className="w-4 h-4 text-[#EC4899]" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Instant incident detection</h3>
+            <p className="text-sm text-[var(--text-muted)]">
+              Automatic incident creation on failure, resolution on recovery. Full timeline history with root cause analysis.
+            </p>
+          </div>
+          <div className="relative bg-[var(--surface-2)] border-t sm:border-t-0 sm:border-l border-[var(--border)] min-h-[140px]">
+            <Image
+              src="/features-incidents.png"
+              alt="Incident timeline showing downtime events"
+              fill
+              className="object-cover object-left group-hover:scale-105 transition-transform duration-700"
+              sizes="(max-width: 768px) 100vw, 33vw"
+              loading="lazy"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Tall card: CSV Import (spans 2 rows) */}
+      <div className="md:row-span-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 hover:border-[var(--border-strong)] transition-all flex flex-col">
+        <div className="w-10 h-10 rounded-lg bg-[#10B981]/10 flex items-center justify-center mb-4">
+          <Zap className="w-4 h-4 text-[#10B981]" />
+        </div>
+        <h3 className="text-sm font-semibold mb-2">Bulk CSV import</h3>
+        <p className="text-xs text-[var(--text-muted)] mb-6">
+          Onboard hundreds of monitors in under a minute. Intelligent parsing with validation.
+        </p>
+        
+        {/* Live stats visualization */}
+        <div className="flex-1 flex flex-col justify-end gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[var(--text-muted)]">Imported</span>
+              <span className="font-mono font-semibold">247 monitors</span>
+            </div>
+            <div className="h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
+              <div 
+                className="h-full rounded-full transition-all duration-1000 ease-out"
+                style={{ width: "75%", backgroundColor: "#10B981" }} 
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[var(--text-muted)]">Active</span>
+              <span className="font-mono font-semibold text-[var(--op-up)]">244 UP</span>
+            </div>
+            <div className="h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
+              <div 
+                className="h-full rounded-full transition-all duration-1000 ease-out delay-200"
+                style={{ width: "98%", backgroundColor: "var(--op-up)" }} 
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-[var(--border)] mt-2">
+            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+              <Check className="w-3 h-3 text-[var(--op-up)]" strokeWidth={3} />
+              <span>3 with warnings</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Small card: SSL */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all flex flex-col justify-center">
+        <div className="w-10 h-10 rounded-lg bg-[#F59E0B]/10 flex items-center justify-center mb-4">
+          <ShieldCheck className="w-4 h-4 text-[#F59E0B]" />
+        </div>
+        <h3 className="text-sm font-semibold">SSL expiry alerts</h3>
+        <p className="text-xs text-[var(--text-muted)] mt-2">
+          Get warned 30, 14, and 7 days before certificates expire.
+        </p>
+      </div>
+
+      {/* Metrics mini-card */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 hover:border-[var(--border-strong)] transition-all flex flex-col justify-center relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-3 opacity-10">
+          <Activity className="w-16 h-16" />
+        </div>
+        <div className="text-3xl font-bold text-[var(--text)] mb-1">99.9%</div>
+        <div className="text-xs text-[var(--text-muted)] mb-3">Average uptime</div>
+        <div className="flex items-center gap-1.5 text-xs text-[var(--op-up)] font-medium">
+          <TrendingUp className="w-3.5 h-3.5" strokeWidth={3} />
+          <span>+0.5% this month</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
 
       {/* Comparison */}
       <section id="comparison" className="border-b border-[var(--border)]">
@@ -404,30 +502,6 @@ export default async function Landing() {
           <div>Built as an MVP prototype.</div>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  trend,
-}: {
-  label: string;
-  value: string;
-  trend?: "up" | "down" | "none";
-}) {
-  return (
-    <div className="p-4 text-center">
-      <div className="text-[10px] uppercase tracking-wider text-[var(--text-subtle)]">
-        {label}
-      </div>
-      <div className="font-mono text-lg mt-1 font-semibold flex items-center justify-center gap-1.5">
-        {value}
-        {trend === "up" && (
-          <TrendingUp className="w-3.5 h-3.5 text-[var(--op-up)]" strokeWidth={3} />
-        )}
-      </div>
     </div>
   );
 }

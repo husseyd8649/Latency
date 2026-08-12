@@ -8,8 +8,8 @@ import {
 } from "@/components/ui/primitives";
 import { AlertTriangle, CheckCircle2, Globe, Network, ShieldCheck } from "lucide-react";
 import { ReconcileIconButton } from "@/components/reconcile-icon-button";
+import { RunFailedButton } from "@/components/run-failed-button"; // Add this import
 import { RegionFilterBar } from "@/components/region-filter-bar";
-
 
 const typeIconMap = {
   HTTP: Globe,
@@ -100,12 +100,17 @@ export default async function IncidentsPage({
   return (
     <>
       <PageHeader
-  title="Incidents"
-  description="Downtime timeline across your monitors."
-  actions={<ReconcileIconButton />}
-/>
+        title="Incidents"
+        description="Downtime timeline across your monitors."
+        actions={
+          <div className="flex items-center gap-2">
+            <RunFailedButton />
+            <ReconcileIconButton />
+          </div>
+        }
+      />
 
-            {activeFilter && (
+      {activeFilter && (
         <RegionFilterBar
           region={{ name: activeFilter.name, color: activeFilter.color }}
           matchedCount={incidents.length}
@@ -198,9 +203,9 @@ function IncidentList({ incidents }: { incidents: IncidentRow[] }) {
             (inc.resolvedAt ?? new Date()).getTime() - inc.startedAt.getTime();
           return (
             <li
-  key={inc.id}
-  className="p-5 flex items-start gap-4 row-hover hover:bg-[var(--surface-2)]/50 transition-colors"
->
+              key={inc.id}
+              className="p-5 flex items-start gap-4 row-hover hover:bg-[var(--surface-2)]/50 transition-colors"
+            >
               <div
                 className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                   resolved

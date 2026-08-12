@@ -375,3 +375,46 @@ export async function reconcileIncidents(): Promise<{
   revalidatePath("/dashboard");
   return { scanned: open.length, resolved: toClose.length };
 }
+
+// ---------- Run failed monitors ---------------------------------------------
+
+/**
+ * Mark every monitor with an open incident whose cause contains "fetch failed"
+ * (case-insensitive) as immediately due. Returns the number queued.
+ */
+export async function runFailedMonitors(): Promise<{ queued: number }> {
+  const user = await requireUser();
+
+  // Find open incidents whose cause matches "fetch failed"
+  const failedIncidents = await prisma.incident.findMany({
+    where: {
+      resolvedAt: null,
+      monitor: { userId: user.id },
+      cause: { contains: "fetch failed", mode: "insensitive" },
+    },
+    select: { monitorId: true },
+  });
+
+  if (failedIncidents.length === 0) {
+    return { queued: 0 };
+  }
+
+  const monitorIds = Array.from(
+    new Set(failedIncidents.map((i) => i.monitorId))
+  );
+
+  const result = await prisma.monitor.updateMany({
+    where: {
+      id: { in: monitorIds },
+      userId: user.id,
+      isPaused: false,
+    },
+    data: { nextCheckAt: new Date() },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/monitors");
+  revalidatePath("/dashboard/incidents");
+
+  return { queued: result.count };
+}

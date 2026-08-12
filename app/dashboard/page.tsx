@@ -22,6 +22,7 @@ import { DashboardGaugeCard } from "@/components/dashboard-gauge-card";
 import { TopUrlsCard } from "@/components/top-urls-card";
 import { RegionalHealth } from "@/components/regional-health";
 import { ReconcileIconButton } from "@/components/reconcile-icon-button";
+import { RunFailedButton } from "@/components/run-failed-button";
 
 export default async function OverviewPage() {
   const user = await requireUser();
@@ -226,14 +227,15 @@ export default async function OverviewPage() {
     </div>
   </div>
   <div className="flex items-center gap-2 shrink-0">
-    <ReconcileIconButton />
-    <Link
-      href="/dashboard/incidents"
-      className="text-[10px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors inline-flex items-center gap-1"
-    >
-      View all →
-    </Link>
-  </div>
+  <RunFailedButton />
+  <ReconcileIconButton />
+  <Link
+    href="/dashboard/incidents"
+    className="text-[10px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors inline-flex items-center gap-1"
+  >
+    View all →
+  </Link>
+</div>
 </div>
 
   <CardBody className="p-0">
