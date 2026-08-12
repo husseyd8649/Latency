@@ -1,4 +1,3 @@
-// lib/checkers/http.ts
 export type CheckResult = {
   status: "UP" | "DOWN";
   responseTimeMs: number | null;
@@ -10,6 +9,9 @@ export async function checkHttp(opts: {
   url: string;
   timeoutMs: number;
   expectedStatus: number;
+  accept401?: boolean;
+  accept403?: boolean;
+  accept429?: boolean;
 }): Promise<CheckResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
@@ -32,10 +34,27 @@ export async function checkHttp(opts: {
 
     const responseTimeMs = Math.round(performance.now() - start);
     
-    // Accept 2xx range when expecting 200, otherwise exact match
-    const isSuccess = opts.expectedStatus === 200 
-      ? res.status >= 200 && res.status < 300
-      : res.status === opts.expectedStatus;
+    // Determine if UP based on status code rules
+    let isSuccess = false;
+    
+    // 1. Standard 2xx success
+    if (res.status >= 200 && res.status < 300) {
+      isSuccess = true;
+    }
+    // 2. Expected exact match (e.g., user wants to check for 404)
+    else if (res.status === opts.expectedStatus) {
+      isSuccess = true;
+    }
+    // 3. Accept 401/403/429 as UP if configured (server is alive)
+    else if (res.status === 401 && opts.accept401) {
+      isSuccess = true;
+    }
+    else if (res.status === 403 && opts.accept403) {
+      isSuccess = true;
+    }
+    else if (res.status === 429 && opts.accept429) {
+      isSuccess = true;
+    }
 
     return {
       status: isSuccess ? "UP" : "DOWN",
