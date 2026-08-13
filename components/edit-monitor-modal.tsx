@@ -22,6 +22,9 @@ export type EditableMonitor = {
   timeoutMs: number;
   expectedStatus: number | null;
   regionId: string | null;
+  accept401?: boolean;
+  accept403?: boolean;
+  accept429?: boolean;
 };
 
 type Region = {
@@ -168,16 +171,60 @@ export function EditMonitorModal({
           </div>
 
           {monitor.type === "HTTP" && (
-            <Field label="Expected status" error={err("expectedStatus")}>
-              <input
-                name="expectedStatus"
-                type="number"
-                min={100}
-                max={599}
-                defaultValue={monitor.expectedStatus ?? 200}
-                className={inputCls(!!err("expectedStatus"))}
-              />
-            </Field>
+            <>
+              <Field label="Expected status" error={err("expectedStatus")}>
+                <input
+                  name="expectedStatus"
+                  type="number"
+                  min={100}
+                  max={599}
+                  defaultValue={monitor.expectedStatus ?? 200}
+                  className={inputCls(!!err("expectedStatus"))}
+                />
+              </Field>
+
+              {/* Accept error codes as UP */}
+              <div className="space-y-3 pt-4 border-t border-[var(--border)]">
+                <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+                  Treat as UP (Advanced)
+                </label>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Mark these response codes as "UP" when the server is responding but rejecting the request.
+                </p>
+                
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--text)] transition-colors">
+                    <input
+                      type="checkbox"
+                      name="accept401"
+                      defaultChecked={monitor.accept401}
+                      className="rounded border-[var(--border)] bg-[var(--surface)] text-[var(--accent)] focus:ring-[var(--accent)] focus:ring-offset-0 h-4 w-4"
+                    />
+                    <span>401 Unauthorized</span>
+                  </label>
+                  
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--text)] transition-colors">
+                    <input
+                      type="checkbox"
+                      name="accept403"
+                      defaultChecked={monitor.accept403}
+                      className="rounded border-[var(--border)] bg-[var(--surface)] text-[var(--accent)] focus:ring-[var(--accent)] focus:ring-offset-0 h-4 w-4"
+                    />
+                    <span>403 Forbidden</span>
+                  </label>
+                  
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-[var(--text)] transition-colors">
+                    <input
+                      type="checkbox"
+                      name="accept429"
+                      defaultChecked={monitor.accept429}
+                      className="rounded border-[var(--border)] bg-[var(--surface)] text-[var(--accent)] focus:ring-[var(--accent)] focus:ring-offset-0 h-4 w-4"
+                    />
+                    <span>429 Rate Limited</span>
+                  </label>
+                </div>
+              </div>
+            </>
           )}
 
           {/* Region */}

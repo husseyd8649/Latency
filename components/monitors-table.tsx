@@ -120,10 +120,10 @@ export function MonitorsTable({
           </tr>
         </thead>
         <tbody className="stagger-list">
-  {sorted.map((row) => (
-    <MonitorRow key={row.id} m={row} regions={regions} />
-  ))}
-</tbody>
+          {sorted.map((row) => (
+            <MonitorRow key={row.id} m={row} regions={regions} />
+          ))}
+        </tbody>
       </table>
     </div>
   );

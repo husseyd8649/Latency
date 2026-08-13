@@ -44,6 +44,7 @@ export type MonitorRowData = {
   isPaused: boolean;
   createdAt: string;
   regionId: string | null;
+  
   last: {
     status: "UP" | "DOWN";
     responseTimeMs: number | null;
@@ -51,6 +52,9 @@ export type MonitorRowData = {
     error: string | null;
   } | null;
   sparkline: { t: number; v: number | null }[];
+  accept401?: boolean;
+  accept403?: boolean;
+  accept429?: boolean;
 };
 
 export function MonitorRow({

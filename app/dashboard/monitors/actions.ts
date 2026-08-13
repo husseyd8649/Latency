@@ -1,4 +1,3 @@
-// app/dashboard/monitors/actions.ts
 "use server";
 
 import { prisma } from "@/lib/prisma";
@@ -21,6 +20,12 @@ export async function createMonitor(
   const user = await requireUser();
 
   const raw = Object.fromEntries(formData.entries());
+  
+  // Handle checkboxes (they only appear in formData when checked)
+  const accept401 = formData.get("accept401") === "on";
+  const accept403 = formData.get("accept403") === "on";
+  const accept429 = formData.get("accept429") === "on";
+  
   const parsed = monitorSchema.safeParse(raw);
 
   if (!parsed.success) {
@@ -35,8 +40,7 @@ export async function createMonitor(
   }
 
   const data = parsed.data;
-
-    const regionId = (formData.get("regionId") as string) || null;
+  const regionId = (formData.get("regionId") as string) || null;
 
   // Verify region belongs to user if provided
   if (regionId) {
@@ -57,6 +61,9 @@ export async function createMonitor(
       intervalSeconds: data.intervalSeconds,
       timeoutMs: data.timeoutMs,
       expectedStatus: data.type === "HTTP" ? data.expectedStatus : null,
+      accept401: data.type === "HTTP" ? accept401 : false,
+      accept403: data.type === "HTTP" ? accept403 : false,
+      accept429: data.type === "HTTP" ? accept429 : false,
       nextCheckAt: new Date(),
       regionId,
     },
@@ -180,6 +187,11 @@ export async function editMonitor(
 ): Promise<EditState> {
   const user = await requireUser();
 
+  // Handle checkboxes
+  const accept401 = formData.get("accept401") === "on";
+  const accept403 = formData.get("accept403") === "on";
+  const accept429 = formData.get("accept429") === "on";
+
   const raw = {
     id: formData.get("id"),
     name: formData.get("name"),
@@ -207,7 +219,7 @@ export async function editMonitor(
   });
   if (!existing) return { error: "Monitor not found." };
 
-    const regionId = (formData.get("regionId") as string) || null;
+  const regionId = (formData.get("regionId") as string) || null;
 
   // Verify region belongs to user if provided
   if (regionId) {
@@ -226,8 +238,10 @@ export async function editMonitor(
       target: parsed.data.target,
       intervalSeconds: parsed.data.intervalSeconds,
       timeoutMs: parsed.data.timeoutMs,
-      expectedStatus:
-        existing.type === "HTTP" ? parsed.data.expectedStatus ?? 200 : null,
+      expectedStatus: existing.type === "HTTP" ? parsed.data.expectedStatus ?? 200 : null,
+      accept401: existing.type === "HTTP" ? accept401 : false,
+      accept403: existing.type === "HTTP" ? accept403 : false,
+      accept429: existing.type === "HTTP" ? accept429 : false,
       regionId,
     },
   });
@@ -240,7 +254,6 @@ export async function editMonitor(
 // ---------- Bulk interval update -------------------------------------------
 
 /**
- /**
  * Bulk update all monitors owned by the current user to a given interval.
  * Also re-staggers nextCheckAt across the new interval window to avoid a burst.
  */

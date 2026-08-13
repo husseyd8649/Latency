@@ -23,6 +23,9 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
         url: monitor.target,
         timeoutMs: monitor.timeoutMs,
         expectedStatus: monitor.expectedStatus ?? 200,
+        accept401: monitor.accept401,
+  accept403: monitor.accept403,
+  accept429: monitor.accept429,
       });
       break;
     case "TCP":
