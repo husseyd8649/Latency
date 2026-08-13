@@ -17,10 +17,11 @@ model User {
   passwordHash  String?
   accounts      Account[]
   monitors      Monitor[]
-  regions   Region[]
-  sessions      Session[]
+  regions       Region[]
   statusPages   StatusPage[]
   webhooks      Webhook[]
+  sessions      Session[]    @relation("UserSessions")
+  loginHistory  LoginHistory[] @relation("UserLogins")
 }
 
 model Account {
@@ -46,7 +47,17 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)
+  userAgent    String?
+  ipAddress    String?
+  location     String?
+  deviceType   String?
+  
+  createdAt    DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model VerificationToken {
@@ -70,16 +81,16 @@ model Monitor {
   lastCheckedAt   DateTime?
   nextCheckAt     DateTime?
   createdAt       DateTime    @default(now())
-  regionId    String?
-  lastStatus         CheckStatus?
+  regionId        String?
+  lastStatus      CheckStatus?
   lastResponseTimeMs Int?
-  lastError          String?
-  region      Region?  @relation(fields: [regionId], references: [id])
+  lastError       String?
+  region          Region?  @relation(fields: [regionId], references: [id])
   checks          Check[]
   incidents       Incident[]
-  accept401 Boolean @default(false) // Unauthorized (auth endpoint)
-  accept403 Boolean @default(false) // Forbidden (WAF/edge protection)
-  accept429 Boolean @default(false) // Too Many Requests (rate limit)
+  accept401       Boolean @default(false)
+  accept403       Boolean @default(false)
+  accept429       Boolean @default(false)
   user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -146,6 +157,23 @@ model Webhook {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LoginHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("UserLogins", fields: [userId], references: [id], onDelete: Cascade)
+  
+  userAgent    String?
+  ipAddress    String?
+  location     String?
+  deviceType   String?
+  
+  createdAt    DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([createdAt])
 }
 
 enum MonitorType {
