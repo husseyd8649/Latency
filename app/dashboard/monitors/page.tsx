@@ -7,7 +7,7 @@ import {
   CardBody,
   PageHeader,
 } from "@/components/ui/primitives";
-import { Globe, PlusCircle } from "lucide-react";
+import { Globe, PlusCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { type MonitorRowData } from "@/components/monitor-row";
 import { MonitorsTable } from "@/components/monitors-table";
 import { RunAllButton } from "@/components/run-all-button";
@@ -17,23 +17,34 @@ import { recentChecksForSparklines } from "@/lib/stats";
 import { bulkUpdateInterval } from "./actions";
 import { RegionFilterDropdown } from "@/components/region-filter-dropdown";
 
+const ITEMS_PER_PAGE = 25;
+
 export default async function MonitorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ region?: string }>;
+  searchParams: Promise<{ 
+    region?: string; 
+    page?: string;
+    search?: string;
+    status?: string;
+    type?: string;
+  }>;
 }) {
   const user = await requireUser();
   const params = await searchParams;
   const regionParam = params.region?.trim() || null;
+  const currentPage = Math.max(1, parseInt(params.page || "1", 10));
+  const searchQuery = params.search?.trim() || "";
+  const statusFilter = params.status || "all";
+  const typeFilter = params.type || "all";
+  const skip = (currentPage - 1) * ITEMS_PER_PAGE;
 
-  // Fetch all regions first — needed for both filter resolution and dropdown
   const regions = await prisma.region.findMany({
     where: { userId: user.id },
     orderBy: { name: "asc" },
     select: { id: true, name: true, slug: true, color: true },
   });
 
-  // Resolve region filter
   let activeFilter: {
     regionId: string | null;
     isUngrouped: boolean;
@@ -62,21 +73,58 @@ export default async function MonitorsPage({
     }
   }
 
-  const monitorWhere: {
-    userId: string;
-    regionId?: string | null;
-  } = { userId: user.id };
+  // Build where clause with ALL filters
+  const monitorWhere: any = { 
+    userId: user.id,
+  };
 
   if (activeFilter) {
     monitorWhere.regionId = activeFilter.isUngrouped ? null : activeFilter.regionId;
   }
 
-  // Now fetches lastStatus, lastResponseTimeMs, lastError, lastCheckedAt directly
-  // No more DISTINCT ON query needed!
-  const [monitors, totalCount] = await Promise.all([
+  // Add search filter (name OR target)
+  if (searchQuery) {
+    monitorWhere.OR = [
+      { name: { contains: searchQuery, mode: 'insensitive' } },
+      { target: { contains: searchQuery, mode: 'insensitive' } },
+    ];
+  }
+
+  // Add status filter
+  if (statusFilter !== "all") {
+    if (statusFilter === "paused") {
+      monitorWhere.isPaused = true;
+    } else if (statusFilter === "up") {
+      monitorWhere.isPaused = false;
+      monitorWhere.lastStatus = "UP";
+    } else if (statusFilter === "down") {
+      monitorWhere.isPaused = false;
+      monitorWhere.lastStatus = "DOWN";
+    } else if (statusFilter === "pending") {
+      monitorWhere.isPaused = false;
+      monitorWhere.lastStatus = null;
+    }
+  }
+
+  // Add type filter
+  if (typeFilter !== "all") {
+    monitorWhere.type = typeFilter.toUpperCase();
+  }
+
+  // Get total count with ALL filters applied
+  const totalCount = await prisma.monitor.count({ where: monitorWhere });
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+
+  // Reset to page 1 if current page is out of bounds after filtering
+  const validPage = Math.min(currentPage, Math.max(1, totalPages));
+  const validSkip = (validPage - 1) * ITEMS_PER_PAGE;
+
+  const [monitors, allMonitorsCount] = await Promise.all([
     prisma.monitor.findMany({
       where: monitorWhere,
       orderBy: { createdAt: "desc" },
+      take: ITEMS_PER_PAGE,
+      skip: validSkip,
       select: {
         id: true,
         name: true,
@@ -92,7 +140,7 @@ export default async function MonitorsPage({
         lastResponseTimeMs: true,
         lastError: true,
         lastCheckedAt: true,
-         accept401: true,
+        accept401: true,
         accept403: true,
         accept429: true,
       },
@@ -100,7 +148,10 @@ export default async function MonitorsPage({
     prisma.monitor.count({ where: { userId: user.id } }),
   ]);
 
-  const activeCount = monitors.filter((m) => !m.isPaused).length;
+  const activeCount = await prisma.monitor.count({ 
+    where: { userId: user.id, isPaused: false } 
+  });
+  
   const filteredCount = monitors.length;
   const monitorIds = monitors.map((m) => m.id);
 
@@ -136,41 +187,107 @@ export default async function MonitorsPage({
     color: r.color,
   }));
 
+  // Build filter params for pagination links
+  const filterParams = new URLSearchParams();
+  if (regionParam) filterParams.set("region", regionParam);
+  if (searchQuery) filterParams.set("search", searchQuery);
+  if (statusFilter !== "all") filterParams.set("status", statusFilter);
+  if (typeFilter !== "all") filterParams.set("type", typeFilter);
+
   return (
     <>
       <PageHeader
-  title="Monitors"
-  description="All checks in your workspace."
-  actions={
-    <>
-      <RegionFilterDropdown
-        regions={regions.map((r) => ({
-          id: r.id,
-          name: r.name,
-          slug: r.slug,
-          color: r.color,
-        }))}
+        title="Monitors"
+        description={`Showing ${validSkip + 1}-${Math.min(validSkip + ITEMS_PER_PAGE, totalCount)} of ${totalCount} monitors`}
+        actions={
+          <>
+            <RegionFilterDropdown
+              regions={regions.map((r) => ({
+                id: r.id,
+                name: r.name,
+                slug: r.slug,
+                color: r.color,
+              }))}
+            />
+            <BulkIntervalForm />
+            <DeleteAllButton count={allMonitorsCount} />
+            <RunAllButton count={activeCount} />
+            <Link href="/dashboard/add">
+              <Button size="sm">
+                <PlusCircle className="w-3.5 h-3.5" />
+                New monitor
+              </Button>
+            </Link>
+          </>
+        }
       />
-      <BulkIntervalForm />
-      <DeleteAllButton count={totalCount} />
-      <RunAllButton count={activeCount} />
-      <Link href="/dashboard/add">
-        <Button size="sm">
-          <PlusCircle className="w-3.5 h-3.5" />
-          New monitor
-        </Button>
-      </Link>
-    </>
-  }
-/>
 
       {activeFilter && (
         <RegionFilterBar
           region={{ name: activeFilter.name, color: activeFilter.color }}
-          matchedCount={filteredCount}
-          totalCount={totalCount}
+          matchedCount={totalCount} // Now shows filtered count
+          totalCount={allMonitorsCount}
         />
       )}
+
+                  {/* Search & Filter Bar - Server Component friendly */}
+      <form 
+        action="/dashboard/monitors"
+        method="GET"
+        className="flex flex-col sm:flex-row gap-3 p-4 border border-[var(--border)] rounded-xl bg-[var(--surface)] mb-4"
+      >
+        <div className="relative flex-1">
+          <input
+            type="text"
+            name="search"
+            placeholder="Search by name or target..."
+            defaultValue={searchQuery}
+            className="w-full h-10 px-4 rounded-md border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition-colors"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            name="status"
+            defaultValue={statusFilter}
+            className="h-10 px-3 rounded-md border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] focus:border-[var(--accent)] focus:outline-none transition-colors cursor-pointer auto-submit"
+          >
+            <option value="all">All Status</option>
+            <option value="up">Up</option>
+            <option value="down">Down</option>
+            <option value="paused">Paused</option>
+            <option value="pending">Pending</option>
+          </select>
+
+          <select
+            name="type"
+            defaultValue={typeFilter}
+            className="h-10 px-3 rounded-md border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] focus:border-[var(--accent)] focus:outline-none transition-colors cursor-pointer auto-submit"
+          >
+            <option value="all">All Types</option>
+            <option value="http">HTTP</option>
+            <option value="tcp">TCP</option>
+            <option value="ssl">SSL</option>
+          </select>
+
+          <button type="submit" className="hidden">Filter</button>
+          
+          {(searchQuery || statusFilter !== "all" || typeFilter !== "all") && (
+            <Link href="/dashboard/monitors">
+              <Button type="button" variant="secondary" size="sm" className="h-10">
+                Clear
+              </Button>
+            </Link>
+          )}
+        </div>
+      </form>
+      
+      {/* Auto-submit script */}
+      <script dangerouslySetInnerHTML={{ __html: `
+        document.querySelectorAll('.auto-submit').forEach(select => {
+          select.addEventListener('change', () => select.closest('form').submit());
+        });
+      `}} />
 
       {rows.length === 0 ? (
         <Card className="animate-fade-up">
@@ -179,19 +296,19 @@ export default async function MonitorsPage({
               <Globe className="w-5 h-5 text-[var(--text-subtle)]" />
             </div>
             <div className="text-sm font-medium text-[var(--text)]">
-              {activeFilter
-                ? `No monitors in ${activeFilter.name}`
+              {activeFilter || searchQuery || statusFilter !== "all" || typeFilter !== "all"
+                ? "No monitors match your filters"
                 : "No monitors yet"}
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-1 mb-5">
-              {activeFilter
-                ? "Try clearing the filter or assign monitors to this region."
+              {activeFilter || searchQuery || statusFilter !== "all" || typeFilter !== "all"
+                ? "Try adjusting your search or filters"
                 : "Add your first HTTP, TCP or SSL check to start monitoring."}
             </div>
-            {activeFilter ? (
+            {(activeFilter || searchQuery || statusFilter !== "all" || typeFilter !== "all") ? (
               <Link href="/dashboard/monitors">
                 <Button size="sm" variant="secondary">
-                  Clear filter
+                  Clear all filters
                 </Button>
               </Link>
             ) : (
@@ -205,9 +322,42 @@ export default async function MonitorsPage({
           </CardBody>
         </Card>
       ) : (
-        <Card className="animate-fade-up overflow-hidden">
-          <MonitorsTable rows={rows} regions={regionListForTable} />
-        </Card>
+        <>
+          <Card className="animate-fade-up overflow-hidden">
+            <MonitorsTable rows={rows} regions={regionListForTable} />
+          </Card>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4">
+              <div className="text-sm text-[var(--text-muted)]">
+                Page {validPage} of {totalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                {validPage > 1 && (
+                  <Link 
+                    href={`/dashboard/monitors?${filterParams.toString()}&page=${validPage - 1}`}
+                  >
+                    <Button variant="secondary" size="sm">
+                      <ArrowLeft className="w-4 h-4 mr-1" />
+                      Previous
+                    </Button>
+                  </Link>
+                )}
+                {validPage < totalPages && (
+                  <Link 
+                    href={`/dashboard/monitors?${filterParams.toString()}&page=${validPage + 1}`}
+                  >
+                    <Button variant="secondary" size="sm">
+                      Next
+                      <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </>
   );
