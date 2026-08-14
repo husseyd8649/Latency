@@ -1,4 +1,3 @@
-// lib/stats.ts
 import { prisma } from "@/lib/prisma";
 
 /** Uptime % for a set of monitor IDs over the last N hours. */
@@ -58,13 +57,15 @@ export async function avgLatency(
  * Aggregates in Postgres to avoid loading all check rows into memory.
  */
 export async function hourlyLatency(
-  monitorIds: string[]
+  monitorIds: string[],
+  hours: number = 24
 ): Promise<{ hour: string; avgMs: number | null; checks: number }[]> {
   const buckets: { hour: string; avgMs: number | null; checks: number }[] = [];
   const now = new Date();
 
-  // Build empty 24 buckets, oldest first
-  for (let i = 23; i >= 0; i--) {
+  // Build empty buckets based on hours requested
+  const bucketCount = Math.min(hours, 24);
+  for (let i = bucketCount - 1; i >= 0; i--) {
     const start = new Date(now.getTime() - i * 60 * 60 * 1000);
     start.setMinutes(0, 0, 0);
     buckets.push({
@@ -76,10 +77,10 @@ export async function hourlyLatency(
 
   if (monitorIds.length === 0) return buckets;
 
-  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
   since.setMinutes(0, 0, 0);
 
-  // Aggregate per-hour in Postgres. Returns ~24 rows instead of tens of thousands.
+  // Aggregate per-hour in Postgres
   const rows = await prisma.$queryRaw<
     { bucket: Date; avg_ms: number | null; count: bigint }[]
   >`
@@ -104,8 +105,8 @@ export async function hourlyLatency(
     });
   }
 
-  for (let i = 0; i < 24; i++) {
-    const bucketTime = new Date(now.getTime() - (23 - i) * 60 * 60 * 1000);
+  for (let i = 0; i < bucketCount; i++) {
+    const bucketTime = new Date(now.getTime() - (bucketCount - 1 - i) * 60 * 60 * 1000);
     bucketTime.setMinutes(0, 0, 0);
     const entry = bucketByKey.get(bucketTime.getTime());
     if (entry && entry.count > 0) {
@@ -192,7 +193,6 @@ export async function dailyUptimeForMonitor(
 
 /**
  * Sparkline data for multiple monitors in a single query.
- * Replaces calling recentChecksForSparkline() per monitor in a Promise.all.
  */
 export async function recentChecksForSparklines(
   monitorIds: string[],
@@ -200,7 +200,6 @@ export async function recentChecksForSparklines(
 ): Promise<Map<string, { t: number; v: number | null }[]>> {
   if (monitorIds.length === 0) return new Map();
 
-  // Fetch last `take` checks per monitor using DISTINCT ON + subquery
   const rows = await prisma.$queryRaw<
     { monitorId: string; checkedAt: Date; responseTimeMs: number | null; status: string }[]
   >`
@@ -238,8 +237,8 @@ export async function recentChecksForSparklines(
 }
 
 /**
- * Top N monitors that are fastest AND currently UP with 100% uptime in the last N hours.
- * Includes a small sparkline of recent response times.
+ * Top N monitors with best average performance over the selected time period.
+ * Calculates period averages instead of using denormalized values.
  */
 export async function topPerformingUrls(
   userId: string,
@@ -255,42 +254,38 @@ export async function topPerformingUrls(
 }[]> {
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
+  // Calculate average response time and uptime percentage for the period
   const rows = await prisma.$queryRaw<
     {
       id: string;
       name: string;
       target: string;
-      lastResponseTimeMs: number;
+      avgResponseTime: number;
+      uptimePct: number;
+      checkCount: number;
     }[]
   >`
     SELECT
       m."id",
       m."name",
       m."target",
-      m."lastResponseTimeMs"
+      AVG(c."responseTimeMs")::float as "avgResponseTime",
+      (COUNT(CASE WHEN c."status" = 'UP' THEN 1 END)::float / COUNT(*)::float * 100)::float as "uptimePct",
+      COUNT(*)::int as "checkCount"
     FROM "Monitor" m
+    JOIN "Check" c ON m."id" = c."monitorId"
     WHERE m."userId" = ${userId}
       AND m."isPaused" = false
-      AND m."lastStatus" = 'UP'
-      AND m."lastResponseTimeMs" IS NOT NULL
-      AND EXISTS (
-        SELECT 1 FROM "Check" c
-        WHERE c."monitorId" = m."id"
-          AND c."checkedAt" >= ${since}
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM "Check" c
-        WHERE c."monitorId" = m."id"
-          AND c."checkedAt" >= ${since}
-          AND c."status" != 'UP'
-      )
-    ORDER BY m."lastResponseTimeMs" ASC
+      AND c."checkedAt" >= ${since}
+    GROUP BY m."id", m."name", m."target"
+    HAVING COUNT(*) > 0
+    ORDER BY AVG(c."responseTimeMs") ASC
     LIMIT ${take}
   `;
 
   if (rows.length === 0) return [];
 
-  // Fetch recent checks for sparklines (last 10 per monitor) in one query
+  // Fetch sparklines for these monitors
   const ids = rows.map((r) => r.id);
   const sparkRows = await prisma.$queryRaw<
     { monitorId: string; responseTimeMs: number; checkedAt: Date }[]
@@ -324,8 +319,8 @@ export async function topPerformingUrls(
     id: r.id,
     name: r.name,
     target: r.target,
-    lastResponseTimeMs: r.lastResponseTimeMs,
-    uptimePct: 100,
+    lastResponseTimeMs: Math.round(r.avgResponseTime),
+    uptimePct: Math.round(r.uptimePct * 10) / 10,
     spark: sparkMap.get(r.id) ?? [],
   }));
 }
