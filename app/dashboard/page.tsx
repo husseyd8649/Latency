@@ -235,7 +235,7 @@ export default async function OverviewPage({
           </CardBody>
         </Card>
 
-        <TopUrlsCard urls={topUrls} />
+        <TopUrlsCard urls={topUrls} hours={hours} />
       </div>
 
       {regionalData.length > 0 && (

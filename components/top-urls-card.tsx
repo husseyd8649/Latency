@@ -32,7 +32,16 @@ const rankConfig = [
   },
 ];
 
-export function TopUrlsCard({ urls }: { urls: TopUrl[] }) {
+export function TopUrlsCard({ 
+  urls, 
+  hours = 24 
+}: { 
+  urls: TopUrl[]; 
+  hours?: number;
+}) {
+  // Format time label based on hours
+  const timeLabel = hours >= 168 ? `${Math.round(hours / 24)} days` : `${hours} hours`;
+
   return (
     <Card className="animate-fade-up h-full">
       <div className="px-5 pt-5 pb-3 border-b border-[var(--border)] flex items-center justify-between gap-3">
@@ -50,7 +59,7 @@ export function TopUrlsCard({ urls }: { urls: TopUrl[] }) {
           </div>
         </div>
         <div className="text-[10px] text-[var(--text-subtle)] shrink-0">
-          Last 24h
+          Last {timeLabel} {/* Dynamic time label */}
         </div>
       </div>
 
