@@ -18,10 +18,10 @@ model User {
   accounts      Account[]
   monitors      Monitor[]
   regions       Region[]
-  statusPages   StatusPage[]
-  webhooks      Webhook[]
   sessions      Session[]    @relation("UserSessions")
   loginHistory  LoginHistory[] @relation("UserLogins")
+  statusPages   StatusPage[]
+  webhooks      Webhook[]
 }
 
 model Account {
@@ -92,10 +92,10 @@ model Monitor {
   accept403       Boolean @default(false)
   accept429       Boolean @default(false)
   user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  // PERFORMANCE: For cron job - quickly find due monitors
   @@index([nextCheckAt, isPaused])
   @@index([userId])
-  @@index([nextCheckAt])
   @@index([regionId])
 }
 
@@ -125,8 +125,10 @@ model Check {
   error          String?
   monitor        Monitor     @relation(fields: [monitorId], references: [id], onDelete: Cascade)
 
+  // PERFORMANCE: Critical for dashboard stats, sparklines, monitor history
   @@index([monitorId, checkedAt(sort: Desc)])
-  @@index([status, checkedAt])
+  // PERFORMANCE: For time-range queries (cleanup, aggregated stats)
+  @@index([checkedAt])
 }
 
 model Incident {
@@ -137,8 +139,10 @@ model Incident {
   cause      String?
   monitor    Monitor   @relation(fields: [monitorId], references: [id], onDelete: Cascade)
 
-  @@index([resolvedAt, startedAt(sort: Desc)])
+  // PERFORMANCE: For incident list queries per monitor
   @@index([monitorId, startedAt(sort: Desc)])
+  // PERFORMANCE: For "open incidents" queries (resolvedAt IS NULL)
+  @@index([resolvedAt, startedAt])
 }
 
 model StatusPage {
@@ -175,7 +179,8 @@ model LoginHistory {
   createdAt    DateTime @default(now())
   lastActiveAt DateTime @default(now())
   
-  @@index([userId])
+  // PERFORMANCE: For admin analytics - quickly fetch user login history
+  @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt])
 }
 
