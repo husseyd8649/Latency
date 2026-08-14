@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const CONCURRENCY = 10;
 const CLEANUP_BATCH_SIZE = 5000;
-const RETENTION_DAYS = 7; // CHANGED: 30 → 7 days
+const RETENTION_DAYS = 30; // Retain 30 days for dashboard time range views
 
 export async function POST(req: Request) {
   // Auth: expect "Authorization: Bearer <CRON_SECRET>"
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
   // -- Cleanup: delete old checks in bounded batches --
   const cleanupStartedAt = Date.now();
   let cleanupDeleted = 0;
-  let incidentsDeleted = 0; // NEW
+  let incidentsDeleted = 0;
   
   try {
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     `;
     cleanupDeleted = Number(result);
 
-    // 2. Cleanup old resolved incidents (NEW - 90 days)
+    // 2. Cleanup old resolved incidents (90 days - separate from checks)
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const incidentResult = await prisma.incident.deleteMany({
       where: {
@@ -69,6 +69,16 @@ export async function POST(req: Request) {
       }
     });
     incidentsDeleted = incidentResult.count;
+
+    // 3. Monitor database size (optional safety check)
+    try {
+      const dbSize = await prisma.$queryRaw<{ size: string }[]>`
+        SELECT pg_size_pretty(pg_database_size(current_database())) as size
+      `;
+      console.log(`Database size: ${dbSize[0].size}`);
+    } catch (e) {
+      // Ignore monitoring errors
+    }
     
   } catch (e) {
     console.error("Cleanup failed:", e);
@@ -82,7 +92,7 @@ export async function POST(req: Request) {
     durationMs,
     cleanup: {
       deleted: cleanupDeleted,
-      incidentsDeleted: incidentsDeleted, // NEW
+      incidentsDeleted: incidentsDeleted,
       durationMs: cleanupDurationMs,
     },
   });

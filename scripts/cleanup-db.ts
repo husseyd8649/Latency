@@ -5,13 +5,13 @@ const BATCH_SIZE = 5000;
 async function cleanup() {
   console.log("Starting database cleanup...");
   
-  // 1. Cleanup Checks (Keep 7 days)
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  // 1. Cleanup Checks (Keep 30 days - matching cron retention)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   let totalDeletedChecks = 0;
   
   while (true) {
     const checks = await prisma.check.findMany({
-      where: { checkedAt: { lt: sevenDaysAgo } },
+      where: { checkedAt: { lt: thirtyDaysAgo } },
       select: { id: true },
       take: BATCH_SIZE,
     });
@@ -25,7 +25,6 @@ async function cleanup() {
     totalDeletedChecks += result.count;
     console.log(`Deleted ${totalDeletedChecks} checks so far...`);
     
-    // Small delay to prevent overwhelming the DB
     await new Promise(r => setTimeout(r, 100));
   }
   
@@ -39,8 +38,8 @@ async function cleanup() {
   });
   
   console.log(`✓ Cleanup complete:`);
-  console.log(`  - Deleted ${totalDeletedChecks} old checks`);
-  console.log(`  - Deleted ${incidents.count} old resolved incidents`);
+  console.log(`  - Deleted ${totalDeletedChecks} old checks (30+ days)`);
+  console.log(`  - Deleted ${incidents.count} old resolved incidents (90+ days)`);
   
   // Show current counts
   const [checkCount, incidentCount] = await Promise.all([
@@ -49,7 +48,7 @@ async function cleanup() {
   ]);
   
   console.log(`\nCurrent totals:`);
-  console.log(`  - Checks: ${checkCount}`);
+  console.log(`  - Checks: ${checkCount} (30 days retention)`);
   console.log(`  - Incidents: ${incidentCount}`);
 }
 
