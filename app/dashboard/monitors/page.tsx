@@ -16,6 +16,7 @@ import { RegionFilterBar } from "@/components/region-filter-bar";
 import { recentChecksForSparklines } from "@/lib/stats";
 import { bulkUpdateInterval } from "./actions";
 import { RegionFilterDropdown } from "@/components/region-filter-dropdown";
+import { MonitorFilters } from "@/components/monitor-filters";
 
 const ITEMS_PER_PAGE = 25;
 
@@ -152,7 +153,6 @@ export default async function MonitorsPage({
     where: { userId: user.id, isPaused: false } 
   });
   
-  const filteredCount = monitors.length;
   const monitorIds = monitors.map((m) => m.id);
 
   const sparklinesMap = await recentChecksForSparklines(monitorIds, 30);
@@ -225,69 +225,17 @@ export default async function MonitorsPage({
       {activeFilter && (
         <RegionFilterBar
           region={{ name: activeFilter.name, color: activeFilter.color }}
-          matchedCount={totalCount} // Now shows filtered count
+          matchedCount={totalCount}
           totalCount={allMonitorsCount}
         />
       )}
 
-                  {/* Search & Filter Bar - Server Component friendly */}
-      <form 
-        action="/dashboard/monitors"
-        method="GET"
-        className="flex flex-col sm:flex-row gap-3 p-4 border border-[var(--border)] rounded-xl bg-[var(--surface)] mb-4"
-      >
-        <div className="relative flex-1">
-          <input
-            type="text"
-            name="search"
-            placeholder="Search by name or target..."
-            defaultValue={searchQuery}
-            className="w-full h-10 px-4 rounded-md border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition-colors"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <select
-            name="status"
-            defaultValue={statusFilter}
-            className="h-10 px-3 rounded-md border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] focus:border-[var(--accent)] focus:outline-none transition-colors cursor-pointer auto-submit"
-          >
-            <option value="all">All Status</option>
-            <option value="up">Up</option>
-            <option value="down">Down</option>
-            <option value="paused">Paused</option>
-            <option value="pending">Pending</option>
-          </select>
-
-          <select
-            name="type"
-            defaultValue={typeFilter}
-            className="h-10 px-3 rounded-md border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] focus:border-[var(--accent)] focus:outline-none transition-colors cursor-pointer auto-submit"
-          >
-            <option value="all">All Types</option>
-            <option value="http">HTTP</option>
-            <option value="tcp">TCP</option>
-            <option value="ssl">SSL</option>
-          </select>
-
-          <button type="submit" className="hidden">Filter</button>
-          
-          {(searchQuery || statusFilter !== "all" || typeFilter !== "all") && (
-            <Link href="/dashboard/monitors">
-              <Button type="button" variant="secondary" size="sm" className="h-10">
-                Clear
-              </Button>
-            </Link>
-          )}
-        </div>
-      </form>
-      
-      {/* Auto-submit script */}
-      <script dangerouslySetInnerHTML={{ __html: `
-        document.querySelectorAll('.auto-submit').forEach(select => {
-          select.addEventListener('change', () => select.closest('form').submit());
-        });
-      `}} />
+      {/* Search & Filter Bar - Client Component */}
+      <MonitorFilters 
+        currentSearch={searchQuery}
+        currentStatus={statusFilter}
+        currentType={typeFilter}
+      />
 
       {rows.length === 0 ? (
         <Card className="animate-fade-up">
