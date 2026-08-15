@@ -14,32 +14,73 @@ type ResolvedIncident = {
   cause: string | null;
 };
 
-export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
+// Helper to race a promise against a timeout
+function withTimeout<T>(promise: Promise<T>, ms: number, context: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(`${context} timed out after ${ms}ms`)), ms)
+    )
+  ]);
+}
+
+export async function runMonitorCheck(
+  monitor: Monitor, 
+  checkTimeoutMs?: number
+): Promise<CheckResult> {
+  // Use provided timeout or fall back to monitor's configured timeout
+  const timeout = checkTimeoutMs ?? monitor.timeoutMs;
+  
   let result: CheckResult;
 
-  switch (monitor.type) {
-    case "HTTP":
-      result = await checkHttp({
-        url: monitor.target,
-        timeoutMs: monitor.timeoutMs,
-        expectedStatus: monitor.expectedStatus ?? 200,
-        accept401: monitor.accept401,
-  accept403: monitor.accept403,
-  accept429: monitor.accept429,
-      });
-      break;
-    case "TCP":
-      result = await checkTcp({
-        target: monitor.target,
-        timeoutMs: monitor.timeoutMs,
-      });
-      break;
-    case "SSL":
-      result = await checkSsl({
-        hostname: monitor.target,
-        timeoutMs: monitor.timeoutMs,
-      });
-      break;
+  try {
+    switch (monitor.type) {
+      case "HTTP":
+        result = await withTimeout(
+          checkHttp({
+            url: monitor.target,
+            timeoutMs: timeout,
+            expectedStatus: monitor.expectedStatus ?? 200,
+            accept401: monitor.accept401,
+            accept403: monitor.accept403,
+            accept429: monitor.accept429,
+          }),
+          timeout + 1000, // 1s buffer for overhead
+          `HTTP check ${monitor.target}`
+        );
+        break;
+      case "TCP":
+        result = await withTimeout(
+          checkTcp({
+            target: monitor.target,
+            timeoutMs: timeout,
+          }),
+          timeout + 1000,
+          `TCP check ${monitor.target}`
+        );
+        break;
+      case "SSL":
+        result = await withTimeout(
+          checkSsl({
+            hostname: monitor.target,
+            timeoutMs: timeout,
+          }),
+          timeout + 1000,
+          `SSL check ${monitor.target}`
+        );
+        break;
+      default:
+        throw new Error(`Unknown monitor type: ${monitor.type}`);
+    }
+  } catch (err) {
+    // If timeout or error, mark as DOWN
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    result = {
+      status: "DOWN",
+      responseTimeMs: null,
+      statusCode: null,
+      error: errorMessage,
+    };
   }
 
   const now = new Date();
@@ -53,7 +94,6 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
   await prisma.$transaction(
     async (tx) => {
       // 1. Read previous status FROM MONITOR (denormalized, fast)
-      // Falls back to Check table only if lastStatus is null (first check ever)
       const previousStatus = monitor.lastStatus ?? null;
 
       // 2. Insert new check row (for historical data + sparklines)
@@ -125,7 +165,7 @@ export async function runMonitorCheck(monitor: Monitor): Promise<CheckResult> {
     }
   );
 
-  // Fire webhooks after commit (fire-and-forget)
+  // Fire webhooks after commit (fire-and-forget - exact pattern from your working code)
   const opened = transitions.opened;
   if (opened) {
     fanOutEvent(monitor.userId, "incident.started", {
