@@ -150,9 +150,14 @@ model StatusPage {
   userId     String
   slug       String   @unique
   title      String
+  description   String?
   monitorIds String[]
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions StatusPageSubscription[]
+
+  @@index([slug])
+  @@index([userId])
 }
 
 model Webhook {
@@ -182,6 +187,17 @@ model LoginHistory {
   // PERFORMANCE: For admin analytics - quickly fetch user login history
   @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt])
+}
+
+model StatusPageSubscription {
+  id           String     @id @default(cuid())
+  statusPageId String
+  email        String
+  createdAt    DateTime   @default(now())
+  statusPage   StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
+  @@unique([statusPageId, email])
+  @@index([statusPageId])
 }
 
 enum MonitorType {
