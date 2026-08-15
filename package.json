@@ -25,6 +25,7 @@
     "recharts": "^3.10.1",
     "resend": "^6.18.1",
     "tailwind-merge": "^3.6.0",
+    "ua-parser-js": "^2.0.10",
     "zod": "^3.25.76"
   },
   "devDependencies": {

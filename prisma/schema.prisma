@@ -115,6 +115,22 @@ model Region {
   @@index([userId])
 }
 
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String   // "MONITOR_CREATE", "MONITOR_UPDATE", "INCIDENT_ACK"
+  entityType  String   // "Monitor", "Incident", "StatusPage"
+  entityId    String?
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+}
+
 model Check {
   id             String      @id @default(cuid())
   monitorId      String

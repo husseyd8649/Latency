@@ -6,8 +6,20 @@ import { monitorSchema } from "@/lib/validation/monitor";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { logAuditEvent } from "@/lib/audit";
+import { headers } from "next/headers";
 
 type ActionState = { error?: string; fieldErrors?: Record<string, string> };
+
+// Helper to get request headers in server actions
+async function getReqHeaders() {
+  const headersList = await headers();
+  return {
+    get(name: string): string | null {
+      return headersList.get(name);
+    },
+  } as Headers;
+}
 
 /**
  * Create a new monitor. Called from the Add form.
@@ -18,7 +30,8 @@ export async function createMonitor(
   formData: FormData
 ): Promise<ActionState> {
   const user = await requireUser();
-
+  const reqHeaders = await getReqHeaders();
+  
   const raw = Object.fromEntries(formData.entries());
   
   // Handle checkboxes (they only appear in formData when checked)
@@ -52,7 +65,7 @@ export async function createMonitor(
     }
   }
 
-  await prisma.monitor.create({
+  const monitor = await prisma.monitor.create({
     data: {
       userId: user.id,
       name: data.name,
@@ -69,6 +82,21 @@ export async function createMonitor(
     },
   });
 
+  // Audit log
+  await logAuditEvent({
+    userId: user.id,
+    action: "MONITOR_CREATE",
+    entityType: "Monitor",
+    entityId: monitor.id,
+    newValue: { 
+      name: monitor.name, 
+      target: monitor.target, 
+      type: monitor.type,
+      intervalSeconds: monitor.intervalSeconds 
+    },
+    req: reqHeaders as any,
+  });
+
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
   redirect("/dashboard/monitors");
@@ -77,11 +105,29 @@ export async function createMonitor(
 /** Delete a monitor (owner only). */
 export async function deleteMonitor(formData: FormData) {
   const user = await requireUser();
+  const reqHeaders = await getReqHeaders();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
+  // Get monitor details before deletion for audit log
+  const monitor = await prisma.monitor.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true, name: true, target: true, type: true },
+  });
+
+  if (!monitor) return;
+
   await prisma.monitor.deleteMany({
     where: { id, userId: user.id },
+  });
+
+  await logAuditEvent({
+    userId: user.id,
+    action: "MONITOR_DELETE",
+    entityType: "Monitor",
+    entityId: monitor.id,
+    oldValue: monitor,
+    req: reqHeaders as any,
   });
 
   revalidatePath("/dashboard/monitors");
@@ -91,18 +137,31 @@ export async function deleteMonitor(formData: FormData) {
 /** Pause / resume a monitor (owner only). */
 export async function togglePause(formData: FormData) {
   const user = await requireUser();
+  const reqHeaders = await getReqHeaders();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
   const monitor = await prisma.monitor.findFirst({
     where: { id, userId: user.id },
-    select: { isPaused: true },
+    select: { id: true, isPaused: true, name: true },
   });
   if (!monitor) return;
 
+  const newPausedState = !monitor.isPaused;
+  
   await prisma.monitor.update({
     where: { id },
-    data: { isPaused: !monitor.isPaused },
+    data: { isPaused: newPausedState },
+  });
+
+  await logAuditEvent({
+    userId: user.id,
+    action: newPausedState ? "MONITOR_PAUSE" : "MONITOR_RESUME",
+    entityType: "Monitor",
+    entityId: monitor.id,
+    oldValue: { isPaused: monitor.isPaused },
+    newValue: { isPaused: newPausedState },
+    req: reqHeaders as any,
   });
 
   revalidatePath("/dashboard/monitors");
@@ -115,9 +174,10 @@ export async function togglePause(formData: FormData) {
  */
 export async function runAllMonitors(): Promise<void> {
   const user = await requireUser();
+  const reqHeaders = await getReqHeaders();
   const now = new Date();
 
-  await prisma.monitor.updateMany({
+  const result = await prisma.monitor.updateMany({
     where: {
       userId: user.id,
       isPaused: false,
@@ -125,6 +185,14 @@ export async function runAllMonitors(): Promise<void> {
     data: {
       nextCheckAt: now,
     },
+  });
+
+  await logAuditEvent({
+    userId: user.id,
+    action: "MONITOR_UPDATE",
+    entityType: "Monitor",
+    newValue: { action: "RUN_ALL_NOW", affectedCount: result.count },
+    req: reqHeaders as any,
   });
 
   revalidatePath("/dashboard/monitors");
@@ -137,9 +205,22 @@ export async function runAllMonitors(): Promise<void> {
  */
 export async function deleteAllMonitors(): Promise<{ deleted: number }> {
   const user = await requireUser();
+  const reqHeaders = await getReqHeaders();
+
+  const countBefore = await prisma.monitor.count({
+    where: { userId: user.id },
+  });
 
   const result = await prisma.monitor.deleteMany({
     where: { userId: user.id },
+  });
+
+  await logAuditEvent({
+    userId: user.id,
+    action: "MONITOR_DELETE",
+    entityType: "Monitor",
+    newValue: { action: "DELETE_ALL", deletedCount: result.count },
+    req: reqHeaders as any,
   });
 
   revalidatePath("/dashboard/monitors");
@@ -186,6 +267,7 @@ export async function editMonitor(
   formData: FormData
 ): Promise<EditState> {
   const user = await requireUser();
+  const reqHeaders = await getReqHeaders();
 
   // Handle checkboxes
   const accept401 = formData.get("accept401") === "on";
@@ -215,7 +297,18 @@ export async function editMonitor(
 
   const existing = await prisma.monitor.findFirst({
     where: { id: parsed.data.id, userId: user.id },
-    select: { type: true },
+    select: { 
+      type: true, 
+      name: true, 
+      target: true, 
+      intervalSeconds: true, 
+      timeoutMs: true,
+      expectedStatus: true,
+      accept401: true,
+      accept403: true,
+      accept429: true,
+      regionId: true,
+    },
   });
   if (!existing) return { error: "Monitor not found." };
 
@@ -231,7 +324,7 @@ export async function editMonitor(
     }
   }
 
-  await prisma.monitor.update({
+  const updated = await prisma.monitor.update({
     where: { id: parsed.data.id },
     data: {
       name: parsed.data.name,
@@ -244,6 +337,36 @@ export async function editMonitor(
       accept429: existing.type === "HTTP" ? accept429 : false,
       regionId,
     },
+  });
+
+  await logAuditEvent({
+    userId: user.id,
+    action: "MONITOR_UPDATE",
+    entityType: "Monitor",
+    entityId: parsed.data.id,
+    oldValue: {
+      name: existing.name,
+      target: existing.target,
+      intervalSeconds: existing.intervalSeconds,
+      timeoutMs: existing.timeoutMs,
+      expectedStatus: existing.expectedStatus,
+      accept401: existing.accept401,
+      accept403: existing.accept403,
+      accept429: existing.accept429,
+      regionId: existing.regionId,
+    },
+    newValue: {
+      name: updated.name,
+      target: updated.target,
+      intervalSeconds: updated.intervalSeconds,
+      timeoutMs: updated.timeoutMs,
+      expectedStatus: updated.expectedStatus,
+      accept401: updated.accept401,
+      accept403: updated.accept403,
+      accept429: updated.accept429,
+      regionId: updated.regionId,
+    },
+    req: reqHeaders as any,
   });
 
   revalidatePath("/dashboard/monitors");
@@ -259,6 +382,7 @@ export async function editMonitor(
  */
 export async function bulkUpdateInterval(formData: FormData): Promise<void> {
   const user = await requireUser();
+  const reqHeaders = await getReqHeaders();
   const seconds = Number(formData.get("seconds") ?? 900);
 
   if (!Number.isFinite(seconds) || seconds < 60 || seconds > 86400) return;
@@ -274,19 +398,13 @@ export async function bulkUpdateInterval(formData: FormData): Promise<void> {
   const now = new Date();
   const bucket = seconds / monitors.length;
 
-  // Use the interactive transaction form so we can set a longer timeout.
-  // 500 individual updates take a while — 30s ceiling is generous.
   await prisma.$transaction(
     async (tx) => {
-      // First, set intervalSeconds for everyone in one query
       await tx.monitor.updateMany({
         where: { userId: user.id },
         data: { intervalSeconds: seconds },
       });
 
-      // Then stagger nextCheckAt — this still needs per-row updates because
-      // each row gets a different timestamp. Batch them sequentially inside
-      // the transaction so they share one connection.
       for (let i = 0; i < monitors.length; i++) {
         await tx.monitor.update({
           where: { id: monitors[i].id },
@@ -298,6 +416,14 @@ export async function bulkUpdateInterval(formData: FormData): Promise<void> {
     },
     { timeout: 60000, maxWait: 15000 }
   );
+
+  await logAuditEvent({
+    userId: user.id,
+    action: "BULK_INTERVAL_UPDATE",
+    entityType: "Monitor",
+    newValue: { intervalSeconds: seconds, affectedCount: monitors.length },
+    req: reqHeaders as any,
+  });
 
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
@@ -315,8 +441,8 @@ export async function reconcileIncidents(): Promise<{
   resolved: number;
 }> {
   const user = await requireUser();
+  const reqHeaders = await getReqHeaders();
 
-  // Find all open incidents for this user
   const open = await prisma.incident.findMany({
     where: {
       resolvedAt: null,
@@ -332,11 +458,8 @@ export async function reconcileIncidents(): Promise<{
     return { scanned: 0, resolved: 0 };
   }
 
-  // Fetch the most recent check for each involved monitor in one query
   const monitorIds = Array.from(new Set(open.map((i) => i.monitorId)));
 
-  // Get latest check per monitor. Use a groupBy trick or fetch top check for each.
-  // Simpler and fast enough at this scale: fetch all recent checks, keep first per monitor.
   const latestChecks = await prisma.check.findMany({
     where: { monitorId: { in: monitorIds } },
     orderBy: { checkedAt: "desc" },
@@ -352,7 +475,6 @@ export async function reconcileIncidents(): Promise<{
     latestChecks.map((c) => [c.monitorId, c])
   );
 
-  // Determine which incidents should be closed
   const toClose: { id: string; resolvedAt: Date }[] = [];
   for (const incident of open) {
     const latest = latestByMonitor.get(incident.monitorId);
@@ -367,7 +489,6 @@ export async function reconcileIncidents(): Promise<{
     return { scanned: open.length, resolved: 0 };
   }
 
-  // Update in batches to avoid holding a single long transaction
   const BATCH_SIZE = 50;
   for (let i = 0; i < toClose.length; i += BATCH_SIZE) {
     const batch = toClose.slice(i, i + BATCH_SIZE);
@@ -384,6 +505,14 @@ export async function reconcileIncidents(): Promise<{
     );
   }
 
+  await logAuditEvent({
+    userId: user.id,
+    action: "RECONCILE_INCIDENTS",
+    entityType: "Incident",
+    newValue: { scanned: open.length, resolved: toClose.length },
+    req: reqHeaders as any,
+  });
+
   revalidatePath("/dashboard/incidents");
   revalidatePath("/dashboard");
   return { scanned: open.length, resolved: toClose.length };
@@ -397,8 +526,8 @@ export async function reconcileIncidents(): Promise<{
  */
 export async function runFailedMonitors(): Promise<{ queued: number }> {
   const user = await requireUser();
+  const reqHeaders = await getReqHeaders();
 
-  // Find open incidents whose cause matches "fetch failed"
   const failedIncidents = await prisma.incident.findMany({
     where: {
       resolvedAt: null,
@@ -423,6 +552,14 @@ export async function runFailedMonitors(): Promise<{ queued: number }> {
       isPaused: false,
     },
     data: { nextCheckAt: new Date() },
+  });
+
+  await logAuditEvent({
+    userId: user.id,
+    action: "MONITOR_UPDATE",
+    entityType: "Monitor",
+    newValue: { action: "RUN_FAILED", queued: result.count },
+    req: reqHeaders as any,
   });
 
   revalidatePath("/dashboard");
