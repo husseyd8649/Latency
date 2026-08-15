@@ -17,6 +17,7 @@ import {
   MapPin,
   PanelLeftClose,
   PanelLeftOpen,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/dashboard/add", label: "Add", icon: PlusCircle },
   { href: "/dashboard/incidents", label: "Incidents", icon: AlertTriangle },
   { href: "/dashboard/status", label: "Status", icon: Globe },
+  { href: "/dashboard/maintenance", label: "Maintenance", icon: Wrench },
   { href: "/dashboard/webhooks", label: "Webhooks", icon: Webhook },
   { href: "/dashboard/regions", label: "Regions", icon: MapPin },
   { href: "/dashboard/architecture", label: "Architecture", icon: Network },
@@ -166,11 +168,11 @@ export function Sidebar({ userEmail }: { userEmail?: string | null }) {
       {/* Footer */}
       <div className="border-t border-[var(--border)] p-3">
         {/* Theme toggle in collapsed mode — single cycling icon button */}
-{collapsed && (
-  <div className="flex justify-center mb-2">
-    <ThemeToggle compact />
-  </div>
-)}
+        {collapsed && (
+          <div className="flex justify-center mb-2">
+            <ThemeToggle compact />
+          </div>
+        )}
 
         {userEmail && !collapsed && (
           <div className="flex items-center gap-2 px-2 py-2 mb-1 animate-fade-in">

@@ -131,6 +131,22 @@ model AuditLog {
   @@index([entityType, entityId])
 }
 
+model MaintenanceWindow {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String   // "Tuesday Night Fiber Maintenance"
+  description    String?
+  monitorIds     String[] // Empty = all monitors
+  startsAt       DateTime
+  endsAt         DateTime
+  suppressAlerts Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  
+  @@index([userId])
+  @@index([startsAt, endsAt])
+  @@index([userId, startsAt, endsAt])
+}
+
 model Check {
   id             String      @id @default(cuid())
   monitorId      String

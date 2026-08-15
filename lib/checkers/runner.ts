@@ -5,6 +5,8 @@ import { checkTcp } from "./tcp";
 import { checkSsl } from "./ssl";
 import type { CheckResult } from "./http";
 import { fanOutEvent } from "@/lib/webhooks";
+import { isInMaintenanceWindow } from "@/lib/maintenance";
+
 
 type OpenedIncident = { id: string; startedAt: Date; cause: string | null };
 type ResolvedIncident = {
@@ -125,18 +127,23 @@ export async function runMonitorCheck(
       const isUp = result.status === "UP";
 
       if (wasUp && !isUp) {
-        const created = await tx.incident.create({
-          data: {
-            monitorId: monitor.id,
-            startedAt: now,
-            cause: result.error ?? "Check failed",
-          },
-        });
-        transitions.opened = {
-          id: created.id,
-          startedAt: created.startedAt,
-          cause: created.cause,
-        };
+  // Check maintenance window before creating incident
+  const inMaintenance = await isInMaintenanceWindow(monitor.id, monitor.userId);
+  
+  if (!inMaintenance) {
+    const created = await tx.incident.create({
+      data: {
+        monitorId: monitor.id,
+        startedAt: now,
+        cause: result.error ?? "Check failed",
+      },
+    });
+    transitions.opened = {
+      id: created.id,
+      startedAt: created.startedAt,
+      cause: created.cause,
+    };
+  }
       } else if (!wasUp && isUp) {
         const open = await tx.incident.findFirst({
           where: { monitorId: monitor.id, resolvedAt: null },
