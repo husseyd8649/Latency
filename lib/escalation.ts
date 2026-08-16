@@ -1,0 +1,215 @@
+import { prisma } from "./prisma";
+import { fanOutEvent } from "./webhooks";
+
+// Industry-standard escalation intervals (in minutes)
+export const ESCALATION_INTERVALS = [
+  { value: 5, label: "5 minutes", description: "Critical - Immediate response" },
+  { value: 10, label: "10 minutes", description: "High priority" },
+  { value: 15, label: "15 minutes", description: "Standard urgent" },
+  { value: 30, label: "30 minutes", description: "Standard escalation" },
+  { value: 45, label: "45 minutes", description: "Extended monitoring" },
+  { value: 60, label: "1 hour", description: "Hourly review" },
+  { value: 120, label: "2 hours", description: "Shift handoff" },
+  { value: 240, label: "4 hours", description: "Half-day review" },
+  { value: 480, label: "8 hours", description: "Business day" },
+  { value: 720, label: "12 hours", description: "Overnight shift" },
+  { value: 1440, label: "24 hours", description: "Daily digest" },
+] as const;
+
+type EscalationStep = {
+  waitMinutes: number;
+  channel: "webhook" | "email" | "sms";
+  target: string;
+  messageTemplate?: string;
+};
+
+export async function processEscalations(): Promise<{
+  processed: number;
+  sent: number;
+  failed: number;
+}> {
+  const now = new Date();
+  let processed = 0;
+  let sent = 0;
+  let failed = 0;
+
+  // Find all open incidents that might need escalation
+  const openIncidents = await prisma.incident.findMany({
+    where: {
+      resolvedAt: null,
+    },
+    include: {
+      monitor: {
+        select: {
+          id: true,
+          userId: true,
+          name: true,
+          target: true,
+          type: true,
+          user: {
+            select: {
+              email: true,
+            },
+          },
+        },
+      },
+    },
+    take: 100, // Process in batches
+  });
+
+  for (const incident of openIncidents) {
+    processed++;
+    
+    // Find applicable policy for this monitor
+    const policy = await findApplicablePolicy(incident.monitor.userId, incident.monitor.id);
+    if (!policy) continue;
+
+    const steps: EscalationStep[] = policy.steps as any;
+    if (!steps || steps.length === 0) continue;
+
+    // Check each step
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const escalationTime = new Date(incident.startedAt.getTime() + step.waitMinutes * 60 * 1000);
+      
+      // Skip if not time yet
+      if (now < escalationTime) continue;
+
+      // Check if already sent
+      const existing = await prisma.escalationEvent.findFirst({
+        where: {
+          incidentId: incident.id,
+          policyId: policy.id,
+          stepIndex: i,
+        },
+      });
+
+      if (existing) continue; // Already processed this step
+
+      // Check if incident was acknowledged (you'd need to add acknowledgedAt to Incident model)
+      // For now, we assume unresolved = unacknowledged
+
+      try {
+        // Send notification based on channel
+        if (step.channel === "webhook") {
+          await sendWebhookEscalation(incident, step, i);
+        }
+        // Future: else if (step.channel === "email") await sendEmailEscalation(...)
+        
+        await prisma.escalationEvent.create({
+          data: {
+            incidentId: incident.id,
+            policyId: policy.id,
+            stepIndex: i,
+            channel: step.channel,
+            target: step.target,
+            status: "sent",
+            sentAt: new Date(),
+          },
+        });
+        sent++;
+      } catch (error) {
+        await prisma.escalationEvent.create({
+          data: {
+            incidentId: incident.id,
+            policyId: policy.id,
+            stepIndex: i,
+            channel: step.channel,
+            target: step.target,
+            status: "failed",
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+        failed++;
+      }
+    }
+  }
+
+  return { processed, sent, failed };
+}
+
+async function findApplicablePolicy(userId: string, monitorId: string) {
+  // 1. Look for specific policy for this monitor
+  const specificPolicy = await prisma.escalationPolicy.findFirst({
+    where: {
+      userId,
+      monitorIds: { has: monitorId },
+    },
+  });
+  
+  if (specificPolicy) return specificPolicy;
+
+  // 2. Look for default policy (applies to all)
+  const defaultPolicy = await prisma.escalationPolicy.findFirst({
+    where: {
+      userId,
+      isDefault: true,
+    },
+  });
+  
+  return defaultPolicy;
+}
+
+async function sendWebhookEscalation(
+  incident: any,
+  step: EscalationStep,
+  stepIndex: number
+) {
+  const payload = {
+    event: "escalation.triggered",
+    timestamp: new Date().toISOString(),
+    step: stepIndex + 1,
+    escalation: {
+      waitMinutes: step.waitMinutes,
+      channel: step.channel,
+      target: step.target,
+    },
+    incident: {
+      id: incident.id,
+      startedAt: incident.startedAt.toISOString(),
+      cause: incident.cause,
+    },
+    monitor: {
+      id: incident.monitor.id,
+      name: incident.monitor.name,
+      target: incident.monitor.target,
+      type: incident.monitor.type,
+    },
+    message: step.messageTemplate || `Escalation Step ${stepIndex + 1}: Monitor ${incident.monitor.name} has been down for ${step.waitMinutes} minutes.`,
+  };
+
+  // Use existing webhook infrastructure or direct fetch
+  const response = await fetch(step.target, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Latency-Escalation": "true",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
+  }
+}
+
+export async function acknowledgeIncident(incidentId: string, userId: string): Promise<void> {
+  // Mark all pending escalation events as acknowledged
+  await prisma.escalationEvent.updateMany({
+    where: {
+      incidentId,
+      status: "pending",
+    },
+    data: {
+      status: "acknowledged",
+    },
+  });
+  
+  // You might also want to add acknowledgedAt/acknowledgedBy to Incident model
+  await prisma.incident.update({
+    where: { id: incidentId },
+    data: {
+      // acknowledgedAt: new Date(), // Add this field to schema if needed
+    },
+  });
+}

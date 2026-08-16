@@ -19,9 +19,11 @@ import {
   PanelLeftOpen,
   Wrench,
   Key,
+  Bell
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
+
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -35,6 +37,7 @@ const navItems = [
   { href: "/dashboard/architecture", label: "Architecture", icon: Network },
   { href: "/dashboard/account", label: "Account", icon: User },
   { href: "/dashboard/api-keys", label: "API Keys", icon: Key },
+  { href: "/dashboard/escalation", label: "Escalations", icon: Bell },
 ];
 
 const STORAGE_KEY = "latency-sidebar-collapsed";

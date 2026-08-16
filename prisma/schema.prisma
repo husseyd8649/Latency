@@ -247,6 +247,37 @@ model ApiKey {
   @@unique([keyHash])
 }
 
+model EscalationPolicy {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String   // "Critical Infrastructure - Tier 1"
+  description String?
+  isDefault   Boolean  @default(false) // Apply to all new monitors
+  steps       Json     // Array of {waitMinutes: number, channel: "webhook", target: string, messageTemplate?: string}
+  monitorIds  String[] // Empty = all monitors
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([isDefault])
+}
+
+model EscalationEvent {
+  id          String   @id @default(cuid())
+  incidentId  String
+  policyId    String
+  stepIndex   Int      // Which step in the policy (0, 1, 2...)
+  channel     String   // "webhook", "email" (future), "sms" (future)
+  target      String   // URL, email address, phone number
+  status      String   @default("pending") // pending, sent, failed, acknowledged
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+  
+  @@index([incidentId, status])
+  @@index([createdAt])
+}
+
 enum MonitorType {
   HTTP
   TCP
