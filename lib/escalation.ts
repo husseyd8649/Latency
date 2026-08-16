@@ -183,6 +183,17 @@ async function sendWebhookEscalation(
   step: EscalationStep,
   stepIndex: number
 ) {
+  // Interpolate template variables
+  const message = step.messageTemplate 
+    ? step.messageTemplate
+        .replace(/{{monitor\.name}}/g, incident.monitor.name)
+        .replace(/{{monitor\.target}}/g, incident.monitor.target)
+        .replace(/{{monitor\.type}}/g, incident.monitor.type)
+        .replace(/{{waitMinutes}}/g, String(step.waitMinutes))
+        .replace(/{{incident\.cause}}/g, incident.cause || "Unknown")
+        .replace(/{{incident\.id}}/g, incident.id)
+    : `Escalation Step ${stepIndex + 1}: Monitor ${incident.monitor.name} has been down for ${step.waitMinutes} minutes.`;
+
   const payload = {
     event: "escalation.triggered",
     timestamp: new Date().toISOString(),
@@ -203,7 +214,7 @@ async function sendWebhookEscalation(
       target: incident.monitor.target,
       type: incident.monitor.type,
     },
-    message: step.messageTemplate || `Escalation Step ${stepIndex + 1}: Monitor ${incident.monitor.name} has been down for ${step.waitMinutes} minutes.`,
+    message,
   };
 
   const response = await fetch(step.target, {
@@ -218,21 +229,4 @@ async function sendWebhookEscalation(
   if (!response.ok) {
     throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
   }
-}
-
-export async function acknowledgeIncident(incidentId: string, userId: string): Promise<void> {
-  await prisma.escalationEvent.updateMany({
-    where: {
-      incidentId,
-      status: "pending",
-    },
-    data: {
-      status: "acknowledged",
-    },
-  });
-  
-  await prisma.incident.update({
-    where: { id: incidentId },
-    data: {},
-  });
 }
