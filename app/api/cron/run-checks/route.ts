@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CONCURRENCY = 15;
-const MAX_MONITORS_PER_RUN = 350; // Conservative for Render free tier 30s limit
+const MAX_MONITORS_PER_RUN = 200; // Conservative for Render free tier 30s limit
 const MAX_EXECUTION_MS = 25000; // Hard stop at 25s (Render limit ~30s)
 
 export async function POST(req: Request) {
