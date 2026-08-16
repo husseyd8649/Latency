@@ -91,6 +91,7 @@ model Monitor {
   accept401       Boolean @default(false)
   accept403       Boolean @default(false)
   accept429       Boolean @default(false)
+  isProtected     Boolean @default(false)
   user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // PERFORMANCE: For cron job - quickly find due monitors

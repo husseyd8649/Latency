@@ -102,37 +102,50 @@ export async function createMonitor(
   redirect("/dashboard/monitors");
 }
 
-/** Delete a monitor (owner only). */
-export async function deleteMonitor(formData: FormData) {
+export async function toggleMonitorProtection(formData: FormData) {
+  "use server";
   const user = await requireUser();
-  const reqHeaders = await getReqHeaders();
   const id = String(formData.get("id") ?? "");
+  const isProtected = formData.get("isProtected") === "true";
+
   if (!id) return;
 
-  // Get monitor details before deletion for audit log
-  const monitor = await prisma.monitor.findFirst({
+  await prisma.monitor.updateMany({
     where: { id, userId: user.id },
-    select: { id: true, name: true, target: true, type: true },
-  });
-
-  if (!monitor) return;
-
-  await prisma.monitor.deleteMany({
-    where: { id, userId: user.id },
-  });
-
-  await logAuditEvent({
-    userId: user.id,
-    action: "MONITOR_DELETE",
-    entityType: "Monitor",
-    entityId: monitor.id,
-    oldValue: monitor,
-    req: reqHeaders as any,
+    data: { isProtected },
   });
 
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
 }
+
+
+/** Delete a monitor (owner only). */
+export async function deleteMonitor(formData: FormData) {
+  "use server";
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  
+  if (!id) return;
+
+  // Check if protected
+  const monitor = await prisma.monitor.findFirst({
+    where: { id, userId: user.id },
+    select: { isProtected: true, name: true },
+  });
+
+  if (monitor?.isProtected) {
+    throw new Error(`Cannot delete protected monitor: ${monitor.name}`);
+  }
+
+  await prisma.monitor.deleteMany({
+    where: { id, userId: user.id, isProtected: false },
+  });
+
+  revalidatePath("/dashboard/monitors");
+  revalidatePath("/dashboard");
+}
+
 
 /** Pause / resume a monitor (owner only). */
 export async function togglePause(formData: FormData) {
@@ -203,29 +216,23 @@ export async function runAllMonitors(): Promise<void> {
  * Delete every monitor owned by the current user. Cascades remove checks
  * and incidents.
  */
-export async function deleteAllMonitors(): Promise<{ deleted: number }> {
+export async function deleteAllMonitors(): Promise<{ deleted: number; protected: number }> {
+  "use server";
   const user = await requireUser();
-  const reqHeaders = await getReqHeaders();
 
-  const countBefore = await prisma.monitor.count({
-    where: { userId: user.id },
+  // Count protected first
+  const protectedCount = await prisma.monitor.count({
+    where: { userId: user.id, isProtected: true },
   });
 
+  // Delete only unprotected
   const result = await prisma.monitor.deleteMany({
-    where: { userId: user.id },
-  });
-
-  await logAuditEvent({
-    userId: user.id,
-    action: "MONITOR_DELETE",
-    entityType: "Monitor",
-    newValue: { action: "DELETE_ALL", deletedCount: result.count },
-    req: reqHeaders as any,
+    where: { userId: user.id, isProtected: false },
   });
 
   revalidatePath("/dashboard/monitors");
   revalidatePath("/dashboard");
-  return { deleted: result.count };
+  return { deleted: result.count, protected: protectedCount };
 }
 
 // ---------- Edit ------------------------------------------------------------

@@ -135,6 +135,7 @@ export default async function MonitorsPage({
         timeoutMs: true,
         expectedStatus: true,
         isPaused: true,
+        isProtected: true,
         createdAt: true,
         regionId: true,
         lastStatus: true,
@@ -153,6 +154,10 @@ export default async function MonitorsPage({
     where: { userId: user.id, isPaused: false } 
   });
   
+  const protectedCount = await prisma.monitor.count({ 
+  where: { userId: user.id, isProtected: true } 
+});
+
   const monitorIds = monitors.map((m) => m.id);
 
   const sparklinesMap = await recentChecksForSparklines(monitorIds, 30);
@@ -167,6 +172,7 @@ export default async function MonitorsPage({
       timeoutMs: m.timeoutMs,
       expectedStatus: m.expectedStatus,
       isPaused: m.isPaused,
+      isProtected: m.isProtected,
       createdAt: m.createdAt.toISOString(),
       regionId: m.regionId,
       last: m.lastStatus
@@ -210,7 +216,7 @@ export default async function MonitorsPage({
               }))}
             />
             <BulkIntervalForm />
-            <DeleteAllButton count={allMonitorsCount} />
+            <DeleteAllButton count={allMonitorsCount} protectedCount={protectedCount} />
             <RunAllButton count={activeCount} />
             <Link href="/dashboard/add">
               <Button size="sm">

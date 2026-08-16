@@ -10,10 +10,12 @@ import {
   Trash2,
   Zap,
   Pencil,
+  Shield,
+  ShieldOff,
 } from "lucide-react";
 import { Badge, StatusDot } from "@/components/ui/primitives";
 import { Sparkline } from "@/components/sparkline";
-import { deleteMonitor, togglePause } from "@/app/dashboard/monitors/actions";
+import { deleteMonitor, togglePause, toggleMonitorProtection } from "@/app/dashboard/monitors/actions";
 import { runNow } from "@/app/dashboard/monitors/run-now";
 import {
   EditMonitorModal,
@@ -42,9 +44,9 @@ export type MonitorRowData = {
   timeoutMs: number;
   expectedStatus: number | null;
   isPaused: boolean;
+  isProtected: boolean; // Added
   createdAt: string;
   regionId: string | null;
-  
   last: {
     status: "UP" | "DOWN";
     responseTimeMs: number | null;
@@ -87,8 +89,20 @@ export function MonitorRow({
           <StatusDot variant={state.dot} />
         </td>
         <td className="px-3 py-3 align-middle">
-          <div className="font-medium text-[var(--text)] transition-colors duration-150 group-hover:text-[var(--accent)]">
-            {m.name}
+          <div className="flex items-center gap-2">
+            <div className="font-medium text-[var(--text)] transition-colors duration-150 group-hover:text-[var(--accent)]">
+              {m.name}
+            </div>
+            {/* Protection Badge */}
+            {m.isProtected && (
+              <span 
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20"
+                title="Protected from deletion"
+              >
+                <Shield className="w-3 h-3" />
+                Protected
+              </span>
+            )}
           </div>
           <div className="text-[10px] text-[var(--text-subtle)] mt-0.5">
             <RelativeTime
@@ -134,6 +148,30 @@ export function MonitorRow({
         </td>
         <td className="px-3 py-3 align-middle text-right pr-5">
           <div className="inline-flex items-center gap-1">
+            {/* Protection Toggle */}
+            <form action={toggleMonitorProtection}>
+              <input type="hidden" name="id" value={m.id} />
+              <input 
+                type="hidden" 
+                name="isProtected" 
+                value={m.isProtected ? "false" : "true"} 
+              />
+              <ActionButton
+                type="submit"
+                title={m.isProtected ? "Unprotect monitor" : "Protect monitor from deletion"}
+                hoverClass={m.isProtected 
+                  ? "hover:text-yellow-600 hover:bg-yellow-500/10" 
+                  : "hover:text-green-600 hover:bg-green-500/10"
+                }
+              >
+                {m.isProtected ? (
+                  <ShieldOff className="w-3.5 h-3.5 text-green-600" />
+                ) : (
+                  <Shield className="w-3.5 h-3.5" />
+                )}
+              </ActionButton>
+            </form>
+
             <ActionButton
               onClick={() => setEditing(true)}
               title="Edit"
@@ -169,14 +207,22 @@ export function MonitorRow({
               </ActionButton>
             </form>
 
+            {/* Delete - Disabled if protected */}
             <form action={deleteMonitor}>
               <input type="hidden" name="id" value={m.id} />
               <ActionButton
                 type="submit"
-                title="Delete"
-                hoverClass="hover:text-[var(--op-down)] hover:bg-[var(--down-soft)]"
+                title={m.isProtected ? "Cannot delete protected monitor" : "Delete"}
+                disabled={m.isProtected}
+                hoverClass={m.isProtected 
+                  ? "" 
+                  : "hover:text-[var(--op-down)] hover:bg-[var(--down-soft)]"
+                }
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className={cn(
+                  "w-3.5 h-3.5",
+                  m.isProtected && "opacity-40"
+                )} />
               </ActionButton>
             </form>
           </div>
@@ -219,7 +265,7 @@ function ActionButton({
       disabled={disabled}
       className={cn(
         "p-1.5 rounded-md text-[var(--text-muted)] transition-all duration-200 active:scale-90",
-        "disabled:opacity-40 disabled:pointer-events-none",
+        "disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed",
         hoverClass
       )}
       title={title}
