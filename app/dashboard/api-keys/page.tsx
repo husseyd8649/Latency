@@ -2,14 +2,17 @@ import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { generateApiKey, revokeApiKey } from "@/lib/api-keys";
 import { revalidatePath } from "next/cache";
-import { Key, Trash2, AlertCircle, CheckCircle } from "lucide-react";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { Key, Copy, Trash2, AlertCircle, CheckCircle } from "lucide-react";
+import { CopyButton } from "@/components/copy-button";
 
-export default async function ApiKeysPage() {
+export default async function ApiKeysPage({ 
+  searchParams 
+}: { 
+  searchParams: Promise<{ newKey?: string }> 
+}) {
   const user = await requireUser();
-  const headersList = await headers();
-  const newKey = headersList.get("x-new-api-key"); // Passed after creation
+  const { newKey } = await searchParams;
   
   const keys = await prisma.apiKey.findMany({
     where: { userId: user.id },
@@ -37,9 +40,12 @@ export default async function ApiKeysPage() {
               <p className="text-sm text-[var(--text-muted)] mb-3">
                 Copy this key now. You won&apos;t be able to see it again.
               </p>
-              <code className="block p-3 bg-[var(--surface-2)] rounded border border-[var(--border)] font-mono text-sm break-all text-[var(--text)]">
-                {newKey}
-              </code>
+              <div className="flex gap-2">
+                <code className="flex-1 p-3 bg-[var(--surface-2)] rounded border border-[var(--border)] font-mono text-sm break-all text-[var(--text)]">
+                  {newKey}
+                </code>
+                <CopyButton text={newKey} />
+              </div>
             </div>
           </div>
         </div>
@@ -47,8 +53,8 @@ export default async function ApiKeysPage() {
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
         <h2 className="text-lg font-medium text-[var(--text)] mb-4">Create New Key</h2>
-        <form action={createKey} className="flex gap-4 items-end">
-          <div className="flex-1 space-y-1.5">
+        <form action={createKey} className="flex flex-col sm:flex-row gap-4 items-end">
+          <div className="flex-1 w-full space-y-1.5">
             <label className="text-sm font-medium text-[var(--text)]">Key Name</label>
             <input 
               name="name" 
@@ -57,7 +63,7 @@ export default async function ApiKeysPage() {
               className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border)] rounded-md text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
             />
           </div>
-          <div className="w-48 space-y-1.5">
+          <div className="w-full sm:w-48 space-y-1.5">
             <label className="text-sm font-medium text-[var(--text)]">Expires</label>
             <select 
               name="expiresInDays"
@@ -71,7 +77,7 @@ export default async function ApiKeysPage() {
           </div>
           <button 
             type="submit"
-            className="px-4 py-2 bg-[var(--accent)] text-white rounded-md hover:opacity-90 transition-opacity font-medium text-sm flex items-center gap-2"
+            className="w-full sm:w-auto px-4 py-2 bg-[var(--accent)] text-white rounded-md hover:opacity-90 transition-opacity font-medium text-sm flex items-center justify-center gap-2"
           >
             <Key className="w-4 h-4" />
             Generate
@@ -167,18 +173,8 @@ async function createKey(formData: FormData) {
   
   const key = await generateApiKey(user.id, name, expiresInDays);
   
-  // Pass key to page via header (hack for server action to client)
-  // In production, you'd use a redirect with query param or session flash
-  revalidatePath("/dashboard/api-keys");
-  
-  // Return key in a way the page can display it (requires client component for optimal UX, but this works)
-  // Actually, let's use a redirect with the key in a cookie or just accept we need a client component for the "copy" feature
-  
-  // For now, we'll add it to the URL temporarily (not secure but works for demo)
-  // Better: Store in DB with a "show_once" flag, or use encrypted cookie
-  
-  // Simple approach: Redirect with hash (not sent to server logs)
-  redirect(`/dashboard/api-keys#key=${encodeURIComponent(key)}`);
+  // Pass key via query parameter (shown once)
+  redirect(`/dashboard/api-keys?newKey=${encodeURIComponent(key)}`);
 }
 
 async function revokeKey(formData: FormData) {
