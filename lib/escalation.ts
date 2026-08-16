@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { fanOutEvent } from "./webhooks";
+import { isInMaintenanceWindow } from "./maintenance";
 
 // Industry-standard escalation intervals (in minutes)
 export const ESCALATION_INTERVALS = [
@@ -16,7 +17,7 @@ export const ESCALATION_INTERVALS = [
   { value: 1440, label: "24 hours", description: "Daily digest" },
 ] as const;
 
-type EscalationStep = {
+export type EscalationStep = {
   waitMinutes: number;
   channel: "webhook" | "email" | "sms";
   target: string;
@@ -27,16 +28,23 @@ export async function processEscalations(): Promise<{
   processed: number;
   sent: number;
   failed: number;
+  skippedPaused: number;
+  skippedMaintenance: number;
 }> {
   const now = new Date();
   let processed = 0;
   let sent = 0;
   let failed = 0;
+  let skippedPaused = 0;
+  let skippedMaintenance = 0;
 
-  // Find all open incidents that might need escalation
+  // Find open incidents but exclude paused monitors at DB level
   const openIncidents = await prisma.incident.findMany({
     where: {
       resolvedAt: null,
+      monitor: {
+        isPaused: false, // Exclude paused monitors
+      },
     },
     include: {
       monitor: {
@@ -46,6 +54,7 @@ export async function processEscalations(): Promise<{
           name: true,
           target: true,
           type: true,
+          isPaused: true,
           user: {
             select: {
               email: true,
@@ -54,11 +63,29 @@ export async function processEscalations(): Promise<{
         },
       },
     },
-    take: 100, // Process in batches
+    take: 100,
   });
 
   for (const incident of openIncidents) {
     processed++;
+    
+    // Double-check paused (defensive)
+    if (incident.monitor.isPaused) {
+      skippedPaused++;
+      continue;
+    }
+
+    // Check if monitor is in maintenance window
+    const inMaintenance = await isInMaintenanceWindow(
+      incident.monitor.id, 
+      incident.monitor.userId
+    );
+    
+    if (inMaintenance) {
+      skippedMaintenance++;
+      console.log(`[Escalation] Skipping incident ${incident.id} - monitor in maintenance window`);
+      continue;
+    }
     
     // Find applicable policy for this monitor
     const policy = await findApplicablePolicy(incident.monitor.userId, incident.monitor.id);
@@ -85,9 +112,6 @@ export async function processEscalations(): Promise<{
       });
 
       if (existing) continue; // Already processed this step
-
-      // Check if incident was acknowledged (you'd need to add acknowledgedAt to Incident model)
-      // For now, we assume unresolved = unacknowledged
 
       try {
         // Send notification based on channel
@@ -125,7 +149,7 @@ export async function processEscalations(): Promise<{
     }
   }
 
-  return { processed, sent, failed };
+  return { processed, sent, failed, skippedPaused, skippedMaintenance };
 }
 
 async function findApplicablePolicy(userId: string, monitorId: string) {
@@ -178,7 +202,6 @@ async function sendWebhookEscalation(
     message: step.messageTemplate || `Escalation Step ${stepIndex + 1}: Monitor ${incident.monitor.name} has been down for ${step.waitMinutes} minutes.`,
   };
 
-  // Use existing webhook infrastructure or direct fetch
   const response = await fetch(step.target, {
     method: "POST",
     headers: {
@@ -194,7 +217,6 @@ async function sendWebhookEscalation(
 }
 
 export async function acknowledgeIncident(incidentId: string, userId: string): Promise<void> {
-  // Mark all pending escalation events as acknowledged
   await prisma.escalationEvent.updateMany({
     where: {
       incidentId,
@@ -205,11 +227,8 @@ export async function acknowledgeIncident(incidentId: string, userId: string): P
     },
   });
   
-  // You might also want to add acknowledgedAt/acknowledgedBy to Incident model
   await prisma.incident.update({
     where: { id: incidentId },
-    data: {
-      // acknowledgedAt: new Date(), // Add this field to schema if needed
-    },
+    data: {},
   });
 }
