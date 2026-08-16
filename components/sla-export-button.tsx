@@ -7,17 +7,24 @@ import { FileText } from "lucide-react";
 export function ExportPDFButton({ report }: { report: any }) {
   const exportPDF = () => {
     const doc = new jsPDF();
-    const monthName = new Date(report.period.year, report.period.month - 1).toLocaleString('default', { 
+    
+    // Extract dates from period.start and period.end
+    const startDate = new Date(report.period.start);
+    const endDate = new Date(report.period.end);
+    
+    const monthName = startDate.toLocaleString('default', { 
       month: 'long', 
       year: 'numeric' 
     });
+    
+    const fileName = `sla-report-${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}.pdf`;
     
     // Header
     doc.setFontSize(20);
     doc.text("SLA Report", 14, 22);
     
     doc.setFontSize(12);
-    doc.text(`Period: ${monthName}`, 14, 32);
+    doc.text(`Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`, 14, 32);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 40);
     
     // Summary
@@ -68,7 +75,7 @@ export function ExportPDFButton({ report }: { report: any }) {
       doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
     }
     
-    doc.save(`sla-report-${report.period.year}-${report.period.month}.pdf`);
+    doc.save(fileName);
   };
   
   return (
