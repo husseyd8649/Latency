@@ -32,6 +32,7 @@ export async function processEscalations(): Promise<{
   skippedMaintenance: number;
 }> {
   const now = new Date();
+  console.log(`[Escalation] Starting check at ${now.toISOString()}`);
   let processed = 0;
   let sent = 0;
   let failed = 0;
@@ -65,6 +66,8 @@ export async function processEscalations(): Promise<{
     },
     take: 100,
   });
+
+  console.log(`[Escalation] Found ${openIncidents.length} open incidents (excluding paused monitors)`);
 
   for (const incident of openIncidents) {
     processed++;
@@ -148,8 +151,9 @@ export async function processEscalations(): Promise<{
       }
     }
   }
-
-  return { processed, sent, failed, skippedPaused, skippedMaintenance };
+   console.log(`[Escalation] Completed: ${processed} processed, ${sent} sent, ${failed} failed, ${skippedPaused} skipped (paused), ${skippedMaintenance} skipped (maintenance)`);
+  
+   return { processed, sent, failed, skippedPaused, skippedMaintenance };
 }
 
 async function findApplicablePolicy(userId: string, monitorId: string) {

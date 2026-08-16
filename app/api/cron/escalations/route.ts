@@ -5,9 +5,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  // Auth check (same CRON_SECRET as your main cron)
   const secret = process.env.CRON_SECRET;
   if (!secret) {
+    console.error("[Cron] CRON_SECRET not configured");
     return NextResponse.json(
       { ok: false, error: "CRON_SECRET not configured" },
       { status: 500 }
@@ -16,21 +16,33 @@ export async function POST(req: Request) {
 
   const authHeader = req.headers.get("authorization") ?? "";
   if (authHeader !== `Bearer ${secret}`) {
+    console.error("[Cron] Unauthorized escalation attempt");
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
+  console.log("[Cron] Starting escalation processing...");
+  const startTime = Date.now();
+
   try {
     const result = await processEscalations();
+    const duration = Date.now() - startTime;
     
-    console.log(`Escalation cron completed: ${result.sent} sent, ${result.failed} failed, ${result.processed} incidents checked`);
+    console.log(`[Cron] Escalation completed in ${duration}ms:`, {
+      processed: result.processed,
+      sent: result.sent,
+      failed: result.failed,
+      skippedPaused: result.skippedPaused,
+      skippedMaintenance: result.skippedMaintenance
+    });
     
     return NextResponse.json({
       ok: true,
       result,
+      durationMs: duration,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Escalation cron failed:", error);
+    console.error("[Cron] Escalation processing failed:", error);
     return NextResponse.json(
       { ok: false, error: String(error) },
       { status: 500 }
@@ -38,7 +50,6 @@ export async function POST(req: Request) {
   }
 }
 
-// Optional: Add GET for manual testing (cron-job.org uses POST, but GET is handy for browser checks)
 export async function GET(req: Request) {
   return POST(req);
 }
