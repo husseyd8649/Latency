@@ -232,6 +232,21 @@ model StatusPageSubscription {
   @@index([statusPageId])
 }
 
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String    // "Terraform Production", "NOC Dashboard"
+  keyPrefix   String    // "lat_live_" (for lookup)
+  keyHash     String    // bcrypt hash of the secret part
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([keyPrefix])
+  @@unique([keyHash])
+}
+
 enum MonitorType {
   HTTP
   TCP
