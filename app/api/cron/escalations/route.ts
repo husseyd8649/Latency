@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  // Auth check
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     console.error("[Cron] CRON_SECRET not configured");
@@ -17,7 +18,10 @@ export async function POST(req: Request) {
   const authHeader = req.headers.get("authorization") ?? "";
   if (authHeader !== `Bearer ${secret}`) {
     console.error("[Cron] Unauthorized escalation attempt");
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" }, 
+      { status: 401 }
+    );
   }
 
   console.log("[Cron] Starting escalation processing...");
@@ -50,6 +54,7 @@ export async function POST(req: Request) {
   }
 }
 
+// Allow GET for manual testing via browser/curl
 export async function GET(req: Request) {
   return POST(req);
 }
