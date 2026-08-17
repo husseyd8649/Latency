@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { GlobalBlurProvider } from "@/components/global-blur-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,7 +38,9 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          {children}
+          <GlobalBlurProvider>
+            {children}
+          </GlobalBlurProvider>
         </ThemeProvider>
       </body>
     </html>
