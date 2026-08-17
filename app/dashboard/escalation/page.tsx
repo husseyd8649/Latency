@@ -160,38 +160,35 @@ export default async function EscalationPage() {
                     </div>
 
                     {/* Channel */}
-                    <div className="md:col-span-3">
-                      <label className="text-xs text-[var(--text-muted)] block mb-1.5">Channel</label>
-                      <select 
-                        name={`step_${index}_channel`}
-                        className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                      >
-                        <option value="webhook">
-                          Webhook
-                        </option>
-                        <option value="email" disabled className="text-[var(--text-muted)]">
-                          Email (soon)
-                        </option>
-                        <option value="sms" disabled className="text-[var(--text-muted)]">
-                          SMS (soon)
-                        </option>
-                      </select>
-                      <div className="flex items-center gap-1 mt-1">
-                        <Webhook className="w-3 h-3 text-[var(--text-subtle)]" />
-                        <span className="text-[10px] text-[var(--text-subtle)]">HTTP POST</span>
-                      </div>
-                    </div>
+<div className="md:col-span-3">
+  <label className="text-xs text-[var(--text-muted)] block mb-1.5">Channel</label>
+  <select 
+    name={`step_${index}_channel`}
+    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+  >
+    <option value="webhook">Webhook</option>
+    <option value="email">Email</option>
+    <option value="sms" disabled>SMS (Coming Soon)</option>
+  </select>
+  <div className="flex items-center gap-1 mt-1">
+    <Mail className="w-3 h-3 text-[var(--text-subtle)]" />
+    <span className="text-[10px] text-[var(--text-subtle)]">Email or Webhook</span>
+  </div>
+</div>
 
                     {/* Target */}
-                    <div className="md:col-span-5">
-                      <label className="text-xs text-[var(--text-muted)] block mb-1.5">Target URL</label>
-                      <input 
-                        type="url"
-                        name={`step_${index}_target`}
-                        placeholder="https://hooks.slack.com/..."
-                        className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                      />
-                    </div>
+<div className="md:col-span-5">
+  <label className="text-xs text-[var(--text-muted)] block mb-1.5">Target</label>
+  <input 
+    type="text"
+    name={`step_${index}_target`}
+    placeholder="https://hooks.slack.com/... or admin@company.com"
+    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+  />
+  <p className="text-[10px] text-[var(--text-subtle)] mt-1">
+    Webhook URL or email address
+  </p>
+</div>
                   </div>
 
                   {/* Message Template */}
@@ -282,11 +279,11 @@ export default async function EscalationPage() {
                               </span>
                               <ChevronRight className="w-4 h-4 text-[var(--border)]" />
                               <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[var(--surface-2)] border border-[var(--border)]">
-                                {step.channel === 'webhook' && <Webhook className="w-3.5 h-3.5 text-[var(--text-subtle)]" />}
-                                {step.channel === 'email' && <Mail className="w-3.5 h-3.5 text-[var(--text-subtle)]" />}
-                                {step.channel === 'sms' && <MessageSquare className="w-3.5 h-3.5 text-[var(--text-subtle)]" />}
-                                <span className="text-xs text-[var(--text-subtle)] uppercase">{step.channel}</span>
-                              </div>
+  {step.channel === 'webhook' && <Webhook className="w-3.5 h-3.5 text-[var(--text-subtle)]" />}
+  {step.channel === 'email' && <Mail className="w-3.5 h-3.5 text-[var(--text-subtle)]" />}
+  {step.channel === 'sms' && <MessageSquare className="w-3.5 h-3.5 text-[var(--text-subtle)]" />}
+  <span className="text-xs text-[var(--text-subtle)] uppercase">{step.channel}</span>
+</div>
                               <code className="text-xs text-[var(--text-muted)] truncate max-w-[200px] hidden sm:block">
                                 {step.target}
                               </code>

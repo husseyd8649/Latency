@@ -1,6 +1,9 @@
 import { prisma } from "./prisma";
 import { fanOutEvent } from "./webhooks";
 import { isInMaintenanceWindow } from "./maintenance";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Industry-standard escalation intervals (in minutes)
 export const ESCALATION_INTERVALS = [
@@ -44,7 +47,7 @@ export async function processEscalations(): Promise<{
     where: {
       resolvedAt: null,
       monitor: {
-        isPaused: false, // Exclude paused monitors
+        isPaused: false,
       },
     },
     include: {
@@ -114,14 +117,15 @@ export async function processEscalations(): Promise<{
         },
       });
 
-      if (existing) continue; // Already processed this step
+      if (existing) continue;
 
       try {
         // Send notification based on channel
         if (step.channel === "webhook") {
           await sendWebhookEscalation(incident, step, i);
+        } else if (step.channel === "email") {
+          await sendEmailEscalation(incident, step, i);
         }
-        // Future: else if (step.channel === "email") await sendEmailEscalation(...)
         
         await prisma.escalationEvent.create({
           data: {
@@ -136,6 +140,7 @@ export async function processEscalations(): Promise<{
         });
         sent++;
       } catch (error) {
+        console.error(`[Escalation] Failed to send ${step.channel}:`, error);
         await prisma.escalationEvent.create({
           data: {
             incidentId: incident.id,
@@ -151,13 +156,13 @@ export async function processEscalations(): Promise<{
       }
     }
   }
-   console.log(`[Escalation] Completed: ${processed} processed, ${sent} sent, ${failed} failed, ${skippedPaused} skipped (paused), ${skippedMaintenance} skipped (maintenance)`);
+
+  console.log(`[Escalation] Completed: ${processed} processed, ${sent} sent, ${failed} failed, ${skippedPaused} skipped (paused), ${skippedMaintenance} skipped (maintenance)`);
   
-   return { processed, sent, failed, skippedPaused, skippedMaintenance };
+  return { processed, sent, failed, skippedPaused, skippedMaintenance };
 }
 
 async function findApplicablePolicy(userId: string, monitorId: string) {
-  // 1. Look for specific policy for this monitor
   const specificPolicy = await prisma.escalationPolicy.findFirst({
     where: {
       userId,
@@ -167,7 +172,6 @@ async function findApplicablePolicy(userId: string, monitorId: string) {
   
   if (specificPolicy) return specificPolicy;
 
-  // 2. Look for default policy (applies to all)
   const defaultPolicy = await prisma.escalationPolicy.findFirst({
     where: {
       userId,
@@ -178,21 +182,31 @@ async function findApplicablePolicy(userId: string, monitorId: string) {
   return defaultPolicy;
 }
 
+function interpolateMessage(
+  template: string | undefined,
+  incident: any,
+  step: EscalationStep,
+  stepIndex: number
+): string {
+  if (!template) {
+    return `Escalation Step ${stepIndex + 1}: Monitor ${incident.monitor.name} has been down for ${step.waitMinutes} minutes.`;
+  }
+  
+  return template
+    .replace(/{{monitor\.name}}/g, incident.monitor.name)
+    .replace(/{{monitor\.target}}/g, incident.monitor.target)
+    .replace(/{{monitor\.type}}/g, incident.monitor.type)
+    .replace(/{{waitMinutes}}/g, String(step.waitMinutes))
+    .replace(/{{incident\.cause}}/g, incident.cause || "Unknown")
+    .replace(/{{incident\.id}}/g, incident.id);
+}
+
 async function sendWebhookEscalation(
   incident: any,
   step: EscalationStep,
   stepIndex: number
 ) {
-  // Interpolate template variables
-  const message = step.messageTemplate 
-    ? step.messageTemplate
-        .replace(/{{monitor\.name}}/g, incident.monitor.name)
-        .replace(/{{monitor\.target}}/g, incident.monitor.target)
-        .replace(/{{monitor\.type}}/g, incident.monitor.type)
-        .replace(/{{waitMinutes}}/g, String(step.waitMinutes))
-        .replace(/{{incident\.cause}}/g, incident.cause || "Unknown")
-        .replace(/{{incident\.id}}/g, incident.id)
-    : `Escalation Step ${stepIndex + 1}: Monitor ${incident.monitor.name} has been down for ${step.waitMinutes} minutes.`;
+  const message = interpolateMessage(step.messageTemplate, incident, step, stepIndex);
 
   const payload = {
     event: "escalation.triggered",
@@ -229,4 +243,80 @@ async function sendWebhookEscalation(
   if (!response.ok) {
     throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
   }
+}
+
+async function sendEmailEscalation(
+  incident: any,
+  step: EscalationStep,
+  stepIndex: number
+) {
+  const message = interpolateMessage(step.messageTemplate, incident, step, stepIndex);
+  
+  const { data, error } = await resend.emails.send({
+    from: "Latency Alerts <onboarding@resend.dev>",
+    to: step.target,
+    subject: `🚨 ESCALATION: ${incident.monitor.name} DOWN for ${step.waitMinutes} minutes`,
+    html: `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb;">
+        <div style="background: #dc2626; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0; text-align: center;">
+          <h1 style="margin: 0; font-size: 20px; font-weight: 700;">ESCALATION ALERT</h1>
+          <p style="margin: 4px 0 0 0; opacity: 0.9; font-size: 14px;">Step ${stepIndex + 1} • ${step.waitMinutes} minutes elapsed</p>
+        </div>
+        
+        <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+          <div style="margin-bottom: 24px;">
+            <h2 style="margin: 0 0 8px 0; color: #111827; font-size: 18px;">${incident.monitor.name}</h2>
+            <p style="margin: 0; color: #6b7280; font-size: 14px; font-family: monospace;">${incident.monitor.target}</p>
+          </div>
+
+          <div style="display: grid; gap: 12px; margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; padding: 12px; background: #fef2f2; border-radius: 6px; border-left: 4px solid #dc2626;">
+              <span style="color: #991b1b; font-weight: 600;">Status</span>
+              <span style="color: #dc2626; font-weight: 700;">DOWN</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 12px; background: #f3f4f6; border-radius: 6px;">
+              <span style="color: #374151;">Duration</span>
+              <span style="color: #111827; font-weight: 600;">${step.waitMinutes} minutes</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 12px; background: #f3f4f6; border-radius: 6px;">
+              <span style="color: #374151;">Type</span>
+              <span style="color: #111827; font-weight: 600;">${incident.monitor.type}</span>
+            </div>
+          </div>
+
+          <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px; margin-bottom: 24px;">
+            <p style="margin: 0; color: #92400e; font-size: 14px; font-weight: 500;">${message}</p>
+          </div>
+
+          <div style="text-align: center;">
+            <a href="https://latency-4hkf.onrender.com/dashboard/incidents" 
+               style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
+              View in Dashboard
+            </a>
+          </div>
+        </div>
+
+        <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 16px;">
+          Sent by Latency Signal Ops Platform
+        </p>
+      </div>
+    `,
+    text: `ESCALATION ALERT - Step ${stepIndex + 1}
+
+Monitor: ${incident.monitor.name}
+Target: ${incident.monitor.target}
+Status: DOWN for ${step.waitMinutes} minutes
+Type: ${incident.monitor.type}
+
+${message}
+
+View dashboard: https://latency-4hkf.onrender.com/dashboard/incidents
+`,
+  });
+
+  if (error) {
+    throw new Error(`Email failed: ${error.message}`);
+  }
+
+  console.log(`[Escalation] Email sent to ${step.target}, id: ${data?.id}`);
 }
