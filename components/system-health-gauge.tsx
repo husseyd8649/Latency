@@ -41,10 +41,16 @@ export function SystemHealthGauge({
   uptimePct,
   activeIncidents,
   avgLatencyMs,
+  upCount,
+  downCount,
+  pausedCount,
 }: {
   uptimePct: number | null;
   activeIncidents: number;
   avgLatencyMs: number | null;
+  upCount: number;
+  downCount: number;
+  pausedCount: number;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -243,22 +249,44 @@ export function SystemHealthGauge({
           )}
         </div>
 
-        {/* Two sub-stats below gauge (Uptime + Avg Latency style like reference) */}
-        <div className="w-full mt-2 flex items-center justify-center gap-10">
-          <div className="text-center">
-            <div className="font-mono text-2xl font-bold text-[var(--text)]">
-              {uptimePct != null ? `${value.toFixed(2)}%` : "—"}
+                {/* Three sub-stats: Up / Down / Paused - Signal Ops Themed */}
+        <div className="w-full mt-4 grid grid-cols-3 gap-3 px-2">
+          {/* Up */}
+          <div className="flex flex-col items-center p-3 rounded-xl bg-[var(--surface-2)] border border-green-500/20 shadow-sm">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Up
+              </span>
             </div>
-            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">
-              Uptime (24h)
+            <div className="font-mono text-2xl font-bold text-green-600 dark:text-green-400">
+              {upCount}
             </div>
           </div>
-          <div className="text-center">
-            <div className="font-mono text-2xl font-bold text-[var(--text)]">
-              {avgLatencyMs != null ? `${avgLatencyMs}ms` : "—"}
+
+          {/* Down */}
+          <div className="flex flex-col items-center p-3 rounded-xl bg-[var(--surface-2)] border border-red-500/20 shadow-sm">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Down
+              </span>
             </div>
-            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">
-              Avg. Load
+            <div className="font-mono text-2xl font-bold text-red-600 dark:text-red-400">
+              {downCount}
+            </div>
+          </div>
+
+          {/* Paused */}
+          <div className="flex flex-col items-center p-3 rounded-xl bg-[var(--surface-2)] border border-yellow-500/20 shadow-sm">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-2 h-2 rounded-full bg-yellow-500" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Paused
+              </span>
+            </div>
+            <div className="font-mono text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+              {pausedCount}
             </div>
           </div>
         </div>

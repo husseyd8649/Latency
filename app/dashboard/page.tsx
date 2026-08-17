@@ -147,6 +147,9 @@ export default async function OverviewPage({
   const latencyMax = 2000;
   const latencyPct = avgMs != null ? Math.min(latencyMax, avgMs) : 0;
   const monitorsMax = Math.max(500, monitors.length);
+  const upCount = monitors.filter(m => !m.isPaused && m.lastStatus === "UP").length;
+  const downCount = monitors.filter(m => !m.isPaused && m.lastStatus === "DOWN").length;
+  const pausedCount = monitors.filter(m => m.isPaused).length;
 
   return (
     <>
@@ -197,22 +200,22 @@ export default async function OverviewPage({
           subtitle={`Past ${hours}h average`}
         />
         <SystemHealthGauge
-          uptimePct={uptime.uptimePct}
-          activeIncidents={activeIncidentCount}
-          avgLatencyMs={avgMs}
-        />
+  uptimePct={uptime.uptimePct}
+  activeIncidents={activeIncidentCount}
+  avgLatencyMs={avgMs}
+  upCount={upCount}
+  downCount={downCount}
+  pausedCount={pausedCount}
+/>
         <DashboardGaugeCard
-          label="Total Monitors"
-          value={monitors.length}
-          maxValue={monitorsMax}
-          displayValue={
-            monitors.length >= 1000
-              ? `${(monitors.length / 1000).toFixed(1)}K`
-              : String(monitors.length)
-          }
-          color="#2563EB"
-          subtitle={`${activeIncidentCount} active incident${activeIncidentCount !== 1 ? "s" : ""}`}
-        />
+  label="Total Monitors"
+  value={monitors.length}
+  displayValue={String(monitors.length)}  // Actual count: 1000
+  maxValue={Math.max(1000, monitors.length)}
+  maxLabel="1000"  // Forces exact number instead of "1K"
+  color="#2563EB"
+  subtitle={`${activeIncidentCount} active incident${activeIncidentCount !== 1 ? "s" : ""}`}
+/>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
