@@ -318,3 +318,24 @@ html, body {
   background-size: 40px 40px;
   mask-image: radial-gradient(ellipse at center, black 40%, transparent 75%);
 }
+
+/* Shimmer animation */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s infinite;
+}
+
+/* Progress animation */
+@keyframes progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-progress {
+  animation: progress 1s ease-in-out infinite;
+}
+
